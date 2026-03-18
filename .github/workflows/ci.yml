@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: mcp-shared
+            path: packages/shared
+            test_path: packages/shared/tests/
+          - name: project-oracle
+            path: packages/oracle
+            test_path: packages/oracle/tests/
+          - name: github-webhook-mcp
+            path: packages/webhook
+            test_path: packages/webhook/tests/
+
+    name: Test ${{ matrix.package.name }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install workspace dependencies
+        run: uv sync --all-packages
+
+      - name: Run tests
+        run: uv run --package ${{ matrix.package.name }} pytest ${{ matrix.package.test_path }} -v
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install workspace dependencies
+        run: uv sync --all-packages
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .

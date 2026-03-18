@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.local.smee-bonjour</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/dns-sd</string>
+        <string>-P</string>
+        <string>smee</string>
+        <string>_http._tcp</string>
+        <string>local</string>
+        <string>80</string>
+        <string>smee.local</string>
+        <string>127.0.0.1</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/smee-bonjour.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/smee-bonjour.err</string>
+</dict>
+</plist>

@@ -1,0 +1,40 @@
+[project]
+name = "github-webhook-mcp"
+version = "0.1.0"
+description = "MCP server exposing GitHub webhook events received via Smee.io"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp-shared",
+    "fastmcp>=2.0.0",
+    "httpx>=0.28.0",
+    "httpx-sse>=0.4.0",
+    "aiosqlite>=0.21.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+]
+
+[project.scripts]
+github-webhook-mcp = "github_webhook_mcp.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.25.0",
+    "pytest-cov>=6.0.0",
+    "pytest-gremlins>=0.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/github_webhook_mcp"]
+
+[tool.uv.sources]
+mcp-shared = { workspace = true }
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["src"]

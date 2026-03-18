@@ -1,0 +1,9 @@
+http://signoz.local {
+	bind 127.0.0.1 [::1]
+	reverse_proxy localhost:8080
+}
+
+http://smee.local {
+	bind 127.0.0.1 [::1]
+	reverse_proxy localhost:8321
+}

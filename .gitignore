@@ -1,0 +1,25 @@
+# Virtual environments
+.venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Testing artifacts
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage/
+.hypothesis/
+.gremlins_cache/
+
+# Build artifacts
+*.egg-info/
+dist/
+
+# Secrets
+.env*.local
+
+# Worktrees
+.worktrees/

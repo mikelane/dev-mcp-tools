@@ -1,0 +1,10 @@
+[project]
+name = "dev-mcp-tools"
+version = "0.1.0"
+requires-python = ">=3.12"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+mcp-shared = { workspace = true }
