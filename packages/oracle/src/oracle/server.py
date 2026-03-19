@@ -269,7 +269,7 @@ def oracle_stats() -> str:
 @mcp.tool()
 @trace_tool("oracle_insights")
 def oracle_insights() -> str:
-    """Return actionable insights about agent behavior: file pairs, re-read candidates, cache trends."""
+    """Return actionable insights: file pairs, re-read candidates, cache trends."""
     _before_tool()
     project = _registry.current()
     if project is None:

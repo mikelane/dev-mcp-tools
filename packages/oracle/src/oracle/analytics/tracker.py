@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from mcp_shared.telemetry import get_tracer
+
 from oracle.storage.store import OracleStore
 
 _MAX_INPUT_SUMMARY = 200
