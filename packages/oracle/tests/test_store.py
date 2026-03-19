@@ -48,7 +48,10 @@ class DescribeOracleStoreInit:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = sorted(row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_"))
             conn.close()
-            assert tables == ["agent_log", "command_results", "file_cache", "git_state"]
+            assert tables == [
+                "agent_log", "command_results", "file_cache", "file_coaccess",
+                "git_state", "session_profiles", "tool_sequences",
+            ]
         finally:
             store2.close()
 
@@ -60,7 +63,31 @@ class DescribeOracleStoreInit:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = sorted(row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_"))
             conn.close()
-            assert tables == ["agent_log", "command_results", "file_cache", "git_state"]
+            assert tables == [
+                "agent_log", "command_results", "file_cache", "file_coaccess",
+                "git_state", "session_profiles", "tool_sequences",
+            ]
+        finally:
+            store.close()
+
+
+@pytest.mark.medium
+class DescribeAnalyticsTables:
+    def it_creates_analytics_tables_on_init(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "analytics_check.db"
+        store = OracleStore(db_path)
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+            )
+            tables = sorted(
+                row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_")
+            )
+            conn.close()
+            assert "tool_sequences" in tables
+            assert "file_coaccess" in tables
+            assert "session_profiles" in tables
         finally:
             store.close()
 

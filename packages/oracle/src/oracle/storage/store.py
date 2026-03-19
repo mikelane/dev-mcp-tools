@@ -64,9 +64,39 @@ class OracleStore:
                 ts           INTEGER NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS tool_sequences (
+                id              INTEGER PRIMARY KEY,
+                session_id      TEXT NOT NULL,
+                sequence_index  INTEGER NOT NULL,
+                tool_name       TEXT NOT NULL,
+                input_summary   TEXT,
+                ts              REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS file_coaccess (
+                file_a          TEXT NOT NULL,
+                file_b          TEXT NOT NULL,
+                session_count   INTEGER NOT NULL DEFAULT 1,
+                last_seen       REAL NOT NULL,
+                PRIMARY KEY (file_a, file_b)
+            );
+
+            CREATE TABLE IF NOT EXISTS session_profiles (
+                session_id      TEXT PRIMARY KEY,
+                started_at      REAL NOT NULL,
+                ended_at        REAL NOT NULL,
+                tool_counts     TEXT NOT NULL,
+                files_touched   INTEGER NOT NULL DEFAULT 0,
+                cache_hit_rate  REAL NOT NULL DEFAULT 0.0
+            );
+
             CREATE INDEX IF NOT EXISTS idx_file_cache_last_read ON file_cache(last_read);
             CREATE INDEX IF NOT EXISTS idx_agent_log_session ON agent_log(session_id);
             CREATE INDEX IF NOT EXISTS idx_command_results_ran ON command_results(ran_at);
+            CREATE INDEX IF NOT EXISTS idx_tool_seq_session
+                ON tool_sequences(session_id);
+            CREATE INDEX IF NOT EXISTS idx_coaccess_count
+                ON file_coaccess(session_count DESC);
             """
         )
 
