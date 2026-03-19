@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from oracle.analytics.insights import InsightsGenerator
 from oracle.storage.store import OracleStore
 
@@ -35,7 +37,8 @@ def handle_oracle_insights(store: OracleStore) -> str:
     if sequences:
         lines = ["Common tool patterns:"]
         for s in sequences[:5]:
-            arrow = " → ".join(s["sequence"])
+            seq = cast("list[str]", s["sequence"])
+            arrow = " → ".join(seq)
             lines.append(f"  {arrow}  ({s['count']}x)")
         sections.append("\n".join(lines))
 

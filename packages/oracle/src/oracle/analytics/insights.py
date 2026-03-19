@@ -46,7 +46,7 @@ class InsightsGenerator:
             pattern_counter: Counter[tuple[str, ...]] = Counter()
             for session_id in session_ids:
                 rows = self._store.get_tool_sequences(session_id)
-                tools = [r["tool_name"] for r in rows]
+                tools = [str(r["tool_name"]) for r in rows]
                 for i in range(len(tools) - window_size + 1):
                     pattern = tuple(tools[i : i + window_size])
                     pattern_counter[pattern] += 1

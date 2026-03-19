@@ -34,17 +34,17 @@ class SessionAggregator:
             cache_hits = 0
 
             for row in rows:
-                tool = row["tool_name"]
+                tool = str(row["tool_name"])
                 tool_counts[tool] = tool_counts.get(tool, 0) + 1
                 if row["cache_hit"]:
                     cache_hits += 1
                 if tool == "oracle_read" and row["input"]:
-                    file_paths.add(row["input"])
+                    file_paths.add(str(row["input"]))
 
             self._store.upsert_session_profile(
                 session_id=session_id,
-                started_at=float(rows[0]["ts"]),
-                ended_at=float(rows[-1]["ts"]),
+                started_at=float(str(rows[0]["ts"])),
+                ended_at=float(str(rows[-1]["ts"])),
                 tool_counts=json.dumps(tool_counts),
                 files_touched=len(file_paths),
                 cache_hit_rate=cache_hits / len(rows),
