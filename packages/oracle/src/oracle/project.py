@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING
 from mcp_shared.project_detect import StackInfo, detect_project_root, detect_stack
 
 if TYPE_CHECKING:
+    from oracle.analytics.aggregator import SessionAggregator
+    from oracle.analytics.tracker import AnalyticsTracker
     from oracle.cache.command_cache import CommandCache
     from oracle.cache.file_cache import FileCache
     from oracle.cache.git_cache import GitCache
@@ -37,4 +39,6 @@ class ProjectState:
     command_cache: CommandCache | None = None
     chunkhound: ChunkhoundClient | None = None
     chunkhound_failed: bool = False
+    tracker: AnalyticsTracker | None = None
+    aggregator: SessionAggregator | None = None
     session_id: str = ""

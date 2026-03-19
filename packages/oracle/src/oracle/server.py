@@ -44,6 +44,8 @@ mcp = FastMCP(
 _oracle_dir = Path(os.environ.get("ORACLE_DIR", str(Path.home() / ".project-oracle")))
 _registry = ProjectRegistry(_oracle_dir)
 
+_previous_session_id: str | None = None
+
 
 def _ensure_caches(project: ProjectState) -> None:
     """Wire up cache layers if not already initialized."""
@@ -61,6 +63,14 @@ def _ensure_caches(project: ProjectState) -> None:
         from oracle.cache.command_cache import CommandCache
 
         project.command_cache = CommandCache(project.store, project.root)
+    if project.tracker is None:
+        from oracle.analytics.tracker import AnalyticsTracker
+
+        project.tracker = AnalyticsTracker(project.store, project.session_id)
+    if project.aggregator is None:
+        from oracle.analytics.aggregator import SessionAggregator
+
+        project.aggregator = SessionAggregator(project.store)
 
 
 def _before_tool() -> None:
@@ -79,11 +89,26 @@ def _log(
     tokens_saved: int,
 ) -> None:
     """Record a tool interaction to the agent log. No-op when store is not wired."""
+    global _previous_session_id
     if project.store is None:
         return
+
+    # Detect session boundary and finalize previous session
+    if (
+        _previous_session_id is not None
+        and _previous_session_id != project.session_id
+        and project.aggregator is not None
+    ):
+        project.aggregator.finalize_session(_previous_session_id)
+
+    _previous_session_id = project.session_id
+
     project.store.log_interaction(
         project.session_id, tool_name, input_data, cache_hit, tokens_saved, int(time.time())
     )
+    if project.tracker is not None:
+        project.tracker.record(tool_name, input_data)
+
     # Emit OTel metrics
     _tool_calls_counter.add(1, {"tool_name": tool_name})
     if cache_hit:
@@ -239,6 +264,21 @@ def oracle_stats() -> str:
     if project.store is None:
         return "Error: store not initialized"
     return handle_oracle_stats(project.session_id, project.store)
+
+
+@mcp.tool()
+@trace_tool("oracle_insights")
+def oracle_insights() -> str:
+    """Return actionable insights about agent behavior: file pairs, re-read candidates, cache trends."""
+    _before_tool()
+    project = _registry.current()
+    if project is None:
+        return "Error: no active project. Call oracle_read first to detect a project."
+    if project.store is None:
+        return "Error: store not initialized"
+    from oracle.tools.insights import handle_oracle_insights
+
+    return handle_oracle_insights(project.store)
 
 
 def main() -> None:
