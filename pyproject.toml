@@ -78,3 +78,4 @@ python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+warn_unused_ignores = false  # @mcp.tool() typed locally but not in CI

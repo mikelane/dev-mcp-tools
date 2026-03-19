@@ -117,7 +117,7 @@ def _log(
         _tokens_saved_counter.add(tokens_saved, {"tool_name": tool_name})
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_read")
 def oracle_read(path: str) -> str:
     """Read a file, returning full content on first read or a compact delta on repeat reads."""
@@ -137,7 +137,7 @@ def oracle_read(path: str) -> str:
     return response
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_grep")
 def oracle_grep(pattern: str, path: str = ".") -> str:
     """Search source files for a regex pattern. Returns up to 50 matches."""
@@ -159,7 +159,7 @@ def oracle_grep(pattern: str, path: str = ".") -> str:
     return result
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_status")
 def oracle_status() -> str:
     """Return current project status: stack info, git branch, clean/dirty state."""
@@ -183,7 +183,7 @@ def oracle_status() -> str:
     return result
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_run")
 def oracle_run(commands: list[str]) -> str:
     """Run allowlisted commands through the cache layer. Returns cached results when unchanged."""
@@ -216,7 +216,7 @@ def oracle_run(commands: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_ask")
 def oracle_ask(question: str) -> str:
     """Ask a natural-language question about the project. Routes to cache, grep, or Haiku."""
@@ -232,7 +232,7 @@ def oracle_ask(question: str) -> str:
     return result
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_forget")
 def oracle_forget(path: str) -> str:
     """Clear the file cache for a path. Next oracle_read returns full content."""
@@ -251,7 +251,7 @@ def oracle_forget(path: str) -> str:
     return result
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_stats")
 def oracle_stats() -> str:
     """Return token savings stats for the current session and cumulative across all sessions."""
@@ -266,7 +266,7 @@ def oracle_stats() -> str:
     return handle_oracle_stats(project.session_id, project.store)
 
 
-@mcp.tool()
+@mcp.tool()  # type: ignore[misc]
 @trace_tool("oracle_insights")
 def oracle_insights() -> str:
     """Return actionable insights: file pairs, re-read candidates, cache trends."""
