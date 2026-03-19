@@ -50,9 +50,7 @@ class DescribeSessionAggregation:
         assert profile is not None
         assert profile["cache_hit_rate"] == pytest.approx(0.0)
 
-    def it_handles_empty_session(
-        self, aggregator: SessionAggregator, store: OracleStore
-    ) -> None:
+    def it_handles_empty_session(self, aggregator: SessionAggregator, store: OracleStore) -> None:
         aggregator.finalize_session("nonexistent")
         profile = store.get_session_profile("nonexistent")
         assert profile is None

@@ -34,9 +34,7 @@ class DescribeSequenceTracking:
         assert rows[0]["sequence_index"] == 0
         assert rows[0]["tool_name"] == "oracle_read"
 
-    def it_increments_sequence_index(
-        self, tracker: AnalyticsTracker, store: OracleStore
-    ) -> None:
+    def it_increments_sequence_index(self, tracker: AnalyticsTracker, store: OracleStore) -> None:
         tracker.record("oracle_read", "a.py")
         tracker.record("oracle_run", "pytest")
         tracker.record("oracle_read", "b.py")
@@ -80,9 +78,7 @@ class DescribeCoaccessTracking:
         pairs = store.get_top_coaccess_pairs(limit=10)
         assert len(pairs) == 3
 
-    def it_ignores_non_read_tools(
-        self, tracker: AnalyticsTracker, store: OracleStore
-    ) -> None:
+    def it_ignores_non_read_tools(self, tracker: AnalyticsTracker, store: OracleStore) -> None:
         tracker.record("oracle_read", "a.py")
         tracker.record("oracle_run", "pytest")
         tracker.record("oracle_read", "b.py")

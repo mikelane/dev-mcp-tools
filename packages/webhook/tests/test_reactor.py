@@ -92,12 +92,17 @@ async def test_spawn_review_success_logs_complete(
     mock_review_process.communicate = AsyncMock(return_value=(b"output", b""))
     mock_review_process.returncode = 0
 
-    with patch("asyncio.create_subprocess_exec", return_value=mock_review_process) as mock_exec:
+    with patch(
+        "asyncio.create_subprocess_exec", return_value=mock_review_process
+    ) as mock_exec:
         await reactor._spawn_review(AUTO_REVIEW_REPO, 42)
 
         mock_exec.assert_called_once_with(
-            "claude", "-p", "/review-pr 42",
-            "--cwd", "/tmp/fake-saymore",
+            "claude",
+            "-p",
+            "/review-pr 42",
+            "--cwd",
+            "/tmp/fake-saymore",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

@@ -16,8 +16,10 @@ def _get_tracer() -> trace.Tracer:
     global _tracer
     if _tracer is None:
         from .telemetry import get_tracer
+
         _tracer = get_tracer("webhook.reactor")
     return _tracer
+
 
 AUTO_REVIEW_REPO = "SayMoreAI/saymore"
 DEFAULT_DEBOUNCE_SECONDS = 900  # 15 minutes
@@ -76,7 +78,9 @@ class PRReactor:
                 )
                 logger.info(
                     "PR %s#%d pushed — review scheduled in %ds",
-                    repo, pr_number, self.debounce_seconds,
+                    repo,
+                    pr_number,
+                    self.debounce_seconds,
                 )
 
     def _cancel_timer(self, timer_key: str) -> None:
@@ -101,8 +105,11 @@ class PRReactor:
             logger.info("Spawning review for %s#%d", repo, pr_number)
             try:
                 review_process = await asyncio.create_subprocess_exec(
-                    "claude", "-p", f"/review-pr {pr_number}",
-                    "--cwd", self.repo_path,
+                    "claude",
+                    "-p",
+                    f"/review-pr {pr_number}",
+                    "--cwd",
+                    self.repo_path,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -113,7 +120,9 @@ class PRReactor:
                 else:
                     logger.warning(
                         "Review failed for %s#%d (exit %d): %s",
-                        repo, pr_number, review_process.returncode,
+                        repo,
+                        pr_number,
+                        review_process.returncode,
                         stderr.decode()[:500],
                     )
                     span.set_attribute("reactor.review_success", False)

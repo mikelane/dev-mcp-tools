@@ -181,9 +181,7 @@ async def test_get_new_prs_returns_correct_result_with_decorator(
 async def test_get_notifications_returns_correct_result_with_decorator(
     store: EventStore,
 ) -> None:
-    await store.store_event(
-        _make_webhook_event("d-tel-5", "push", "push")
-    )
+    await store.store_event(_make_webhook_event("d-tel-5", "push", "push"))
 
     result = await get_notifications()
     parsed = json.loads(result)
@@ -287,15 +285,17 @@ async def test_smee_client_increments_events_received_counter(
         "sender": {"login": "octocat"},
     }
     payload_bytes = json.dumps(body).encode()
-    signature = "sha256=" + hmac.new(
-        secret.encode(), payload_bytes, hashlib.sha256
-    ).hexdigest()
-    envelope = json.dumps({
-        "body": body,
-        "x-github-event": "pull_request",
-        "x-github-delivery": "d-smee-tel-1",
-        "x-hub-signature-256": signature,
-    })
+    signature = (
+        "sha256=" + hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
+    )
+    envelope = json.dumps(
+        {
+            "body": body,
+            "x-github-event": "pull_request",
+            "x-github-delivery": "d-smee-tel-1",
+            "x-hub-signature-256": signature,
+        }
+    )
 
     call_args_list: list[tuple[Any, ...]] = []
     original_add = telemetry.events_received_counter.add
@@ -456,7 +456,5 @@ async def test_reactor_traces_spawn_review_cli_not_found() -> None:
 
     reactor = PRReactor(repo_path="/tmp/fake")
 
-    with patch(
-        "asyncio.create_subprocess_exec", side_effect=FileNotFoundError
-    ):
+    with patch("asyncio.create_subprocess_exec", side_effect=FileNotFoundError):
         await reactor._spawn_review("SayMoreAI/saymore", 42)

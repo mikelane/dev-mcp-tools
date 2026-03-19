@@ -824,9 +824,7 @@ class DescribeOracleForgetFileCacheNone:
 class DescribeOTelInstrumentation:
     """Verify OTel decorators and metrics do not break tool behavior."""
 
-    def it_preserves_oracle_read_behavior(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
+    def it_preserves_oracle_read_behavior(self, tmp_path: Path, mocker: MockerFixture) -> None:
         from oracle.registry import ProjectRegistry
         from oracle.server import oracle_read
 
@@ -842,9 +840,7 @@ class DescribeOTelInstrumentation:
         result = oracle_read(str(project_dir / "foo.py"))
         assert "x = 1" in result
 
-    def it_records_tool_calls_metric_on_read(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
+    def it_records_tool_calls_metric_on_read(self, tmp_path: Path, mocker: MockerFixture) -> None:
         from oracle.registry import ProjectRegistry
         from oracle.server import _tool_calls_counter, oracle_read
 
@@ -861,9 +857,7 @@ class DescribeOTelInstrumentation:
         oracle_read(str(project_dir / "foo.py"))
         mock_add.assert_called()
 
-    def it_records_cache_hits_metric_on_reread(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
+    def it_records_cache_hits_metric_on_reread(self, tmp_path: Path, mocker: MockerFixture) -> None:
         from oracle.registry import ProjectRegistry
         from oracle.server import _cache_hits_counter, oracle_read
 
@@ -942,9 +936,7 @@ class DescribeOracleInsightsTool:
         result = oracle_insights()
         assert "no active project" in result.lower()
 
-    def it_returns_insights_for_active_project(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
+    def it_returns_insights_for_active_project(self, tmp_path: Path, mocker: MockerFixture) -> None:
         from oracle.registry import ProjectRegistry
         from oracle.server import oracle_insights, oracle_read
 
@@ -960,9 +952,7 @@ class DescribeOracleInsightsTool:
         result = oracle_insights()
         assert "no analytics data" in result.lower()
 
-    def it_returns_error_when_store_is_none(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
+    def it_returns_error_when_store_is_none(self, tmp_path: Path, mocker: MockerFixture) -> None:
         from oracle.registry import ProjectRegistry
         from oracle.server import oracle_insights
 

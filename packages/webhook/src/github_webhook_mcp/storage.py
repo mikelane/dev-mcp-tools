@@ -21,8 +21,10 @@ def _get_tracer() -> trace.Tracer:
     global _tracer
     if _tracer is None:
         from .telemetry import get_tracer
+
         _tracer = get_tracer("webhook.storage")
     return _tracer
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (

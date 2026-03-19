@@ -171,7 +171,9 @@ async def test_get_notifications_returns_all(store: EventStore) -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_notifications_summary_no_double_space_when_action_is_none(store: EventStore) -> None:
+async def test_get_notifications_summary_no_double_space_when_action_is_none(
+    store: EventStore,
+) -> None:
     """When action is None the summary must not contain a double space."""
     webhook_event = WebhookEvent(
         received_at=datetime.now(timezone.utc),

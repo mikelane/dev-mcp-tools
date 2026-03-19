@@ -122,7 +122,11 @@ class SmeeClient:
                 },
             )
 
-            if self.reactor and webhook_event.event_type == "pull_request" and webhook_event.action:
+            if (
+                self.reactor
+                and webhook_event.event_type == "pull_request"
+                and webhook_event.action
+            ):
                 pr_number = webhook_event.payload.get("number")
                 if isinstance(pr_number, int):
                     await self.reactor.on_pr_event(

@@ -22,9 +22,9 @@ def _make_smee_envelope(
 ) -> dict[str, Any]:
     """Build a Smee SSE envelope dict matching Smee.io's format."""
     payload_bytes = json.dumps(body).encode()
-    signature = "sha256=" + hmac.new(
-        SECRET.encode(), payload_bytes, hashlib.sha256
-    ).hexdigest()
+    signature = (
+        "sha256=" + hmac.new(SECRET.encode(), payload_bytes, hashlib.sha256).hexdigest()
+    )
     return {
         "body": body,
         "x-github-event": event,
@@ -62,7 +62,8 @@ async def test_valid_event_is_stored(client: SmeeClient, store: EventStore) -> N
 
 @pytest.mark.asyncio
 async def test_event_with_bad_signature_is_still_stored(
-    client: SmeeClient, store: EventStore,
+    client: SmeeClient,
+    store: EventStore,
 ) -> None:
     """Smee.io re-serializes JSON, so signatures never match.
     Events are stored anyway since the channel URL is the security boundary."""
@@ -86,7 +87,8 @@ async def test_event_with_bad_signature_is_still_stored(
 
 @pytest.mark.asyncio
 async def test_event_missing_repo_is_skipped(
-    client: SmeeClient, store: EventStore,
+    client: SmeeClient,
+    store: EventStore,
 ) -> None:
     body: dict[str, Any] = {"action": "completed"}  # no "repository" key
     smee_envelope = _make_smee_envelope(body, event="check_run", delivery="d-norepo")
@@ -116,7 +118,9 @@ async def test_pr_event_notifies_reactor(store: EventStore) -> None:
         "sender": {"login": "dev"},
         "pull_request": {"number": 77, "title": "New feature"},
     }
-    smee_envelope = _make_smee_envelope(body, event="pull_request", delivery="d-pr-notify")
+    smee_envelope = _make_smee_envelope(
+        body, event="pull_request", delivery="d-pr-notify"
+    )
 
     await client.process_sse_message(json.dumps(smee_envelope))
 
@@ -125,7 +129,8 @@ async def test_pr_event_notifies_reactor(store: EventStore) -> None:
 
 @pytest.mark.asyncio
 async def test_non_json_sse_data_is_skipped(
-    client: SmeeClient, store: EventStore,
+    client: SmeeClient,
+    store: EventStore,
 ) -> None:
     """Non-JSON SSE data (e.g. keepalive messages) is silently skipped."""
     await client.process_sse_message("this is not json")
@@ -136,7 +141,8 @@ async def test_non_json_sse_data_is_skipped(
 
 @pytest.mark.asyncio
 async def test_json_without_body_key_is_skipped(
-    client: SmeeClient, store: EventStore,
+    client: SmeeClient,
+    store: EventStore,
 ) -> None:
     """SSE data that parses as JSON but has no 'body' key is skipped."""
     await client.process_sse_message(json.dumps({"timestamp": 12345}))
@@ -163,7 +169,9 @@ async def test_non_pr_event_does_not_notify_reactor(store: EventStore) -> None:
         "repository": {"full_name": "mikelane/repo"},
         "sender": {"login": "bot"},
     }
-    smee_envelope = _make_smee_envelope(body, event="push", delivery="d-push-no-reactor")
+    smee_envelope = _make_smee_envelope(
+        body, event="push", delivery="d-push-no-reactor"
+    )
 
     await client.process_sse_message(json.dumps(smee_envelope))
 
@@ -193,7 +201,9 @@ async def test_pr_event_without_number_does_not_notify_reactor(
         "repository": {"full_name": "mikelane/repo"},
         "sender": {"login": "dev"},
     }
-    smee_envelope = _make_smee_envelope(body, event="pull_request", delivery="d-pr-no-num")
+    smee_envelope = _make_smee_envelope(
+        body, event="pull_request", delivery="d-pr-no-num"
+    )
 
     await client.process_sse_message(json.dumps(smee_envelope))
 
@@ -204,7 +214,8 @@ async def test_pr_event_without_number_does_not_notify_reactor(
 
 @pytest.mark.asyncio
 async def test_backoff_resets_after_successful_event(
-    client: SmeeClient, store: EventStore,
+    client: SmeeClient,
+    store: EventStore,
 ) -> None:
     """After a successful process_sse_message, _backoff resets to 1.0."""
     client._backoff = 16.0  # simulate previous reconnection backoff
@@ -224,7 +235,8 @@ async def test_backoff_resets_after_successful_event(
 
 @pytest.mark.asyncio
 async def test_event_without_signature_is_stored(
-    client: SmeeClient, store: EventStore,
+    client: SmeeClient,
+    store: EventStore,
 ) -> None:
     """Events with no x-hub-signature-256 header are stored without error."""
     smee_envelope = {
@@ -248,7 +260,8 @@ async def test_event_without_signature_is_stored(
 
 @pytest.mark.asyncio
 async def test_missing_optional_headers_use_fallbacks(
-    client: SmeeClient, store: EventStore,
+    client: SmeeClient,
+    store: EventStore,
 ) -> None:
     """Events missing x-github-event and x-github-delivery use fallbacks."""
     smee_envelope = {
