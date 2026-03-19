@@ -141,8 +141,8 @@ class SmeeClient:
                 with _tracer.start_as_current_span("smee.connection") as conn_span:
                     conn_span.set_attribute("smee.channel_url", self.channel_url)
                     async with (
-                        httpx.AsyncClient(timeout=None) as client,
-                        aconnect_sse(  # noqa: S113
+                        httpx.AsyncClient(timeout=None) as client,  # noqa: S113
+                        aconnect_sse(
                             client, "GET", self.channel_url
                         ) as source,
                     ):
