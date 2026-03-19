@@ -142,9 +142,7 @@ class SmeeClient:
                     conn_span.set_attribute("smee.channel_url", self.channel_url)
                     async with (
                         httpx.AsyncClient(timeout=None) as client,  # noqa: S113
-                        aconnect_sse(
-                            client, "GET", self.channel_url
-                        ) as source,
+                        aconnect_sse(client, "GET", self.channel_url) as source,
                     ):
                         self._backoff = 1.0
                         async for sse_event in source.aiter_sse():
