@@ -775,6 +775,111 @@ class DescribeOracleForgetFileCacheNone:
         assert "file cache not initialized" in result.lower()
 
 
+class DescribeOTelInstrumentation:
+    """Verify OTel decorators and metrics do not break tool behavior."""
+
+    def it_preserves_oracle_read_behavior(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        from oracle.registry import ProjectRegistry
+        from oracle.server import oracle_read
+
+        oracle_dir = tmp_path / ".oracle"
+        oracle_dir.mkdir()
+        (oracle_dir / "projects").mkdir()
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        (project_dir / ".git").mkdir()
+        (project_dir / "foo.py").write_text("x = 1\n")
+
+        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
+        result = oracle_read(str(project_dir / "foo.py"))
+        assert "x = 1" in result
+
+    def it_records_tool_calls_metric_on_read(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        from oracle.registry import ProjectRegistry
+        from oracle.server import _tool_calls_counter, oracle_read
+
+        oracle_dir = tmp_path / ".oracle"
+        oracle_dir.mkdir()
+        (oracle_dir / "projects").mkdir()
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        (project_dir / ".git").mkdir()
+        (project_dir / "foo.py").write_text("x = 1\n")
+
+        mock_add = mocker.patch.object(_tool_calls_counter, "add")
+        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
+        oracle_read(str(project_dir / "foo.py"))
+        mock_add.assert_called()
+
+    def it_records_cache_hits_metric_on_reread(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        from oracle.registry import ProjectRegistry
+        from oracle.server import _cache_hits_counter, oracle_read
+
+        oracle_dir = tmp_path / ".oracle"
+        oracle_dir.mkdir()
+        (oracle_dir / "projects").mkdir()
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        (project_dir / ".git").mkdir()
+        (project_dir / "foo.py").write_text("x = 1\n")
+
+        mock_add = mocker.patch.object(_cache_hits_counter, "add")
+        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
+        # First read: miss. Second read: cache hit.
+        oracle_read(str(project_dir / "foo.py"))
+        oracle_read(str(project_dir / "foo.py"))
+        mock_add.assert_called()
+
+    def it_records_tokens_saved_metric_on_reread(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        from oracle.registry import ProjectRegistry
+        from oracle.server import _tokens_saved_counter, oracle_read
+
+        oracle_dir = tmp_path / ".oracle"
+        oracle_dir.mkdir()
+        (oracle_dir / "projects").mkdir()
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        (project_dir / ".git").mkdir()
+        (project_dir / "foo.py").write_text("x = 1\n")
+
+        mock_add = mocker.patch.object(_tokens_saved_counter, "add")
+        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
+        # First read: miss. Second read: tokens saved > 0.
+        oracle_read(str(project_dir / "foo.py"))
+        oracle_read(str(project_dir / "foo.py"))
+        mock_add.assert_called()
+        # The amount argument is the first positional arg
+        amount = mock_add.call_args[0][0]
+        assert amount > 0
+
+    def it_does_not_record_cache_hit_on_first_read(
+        self, tmp_path: Path, mocker: MockerFixture
+    ) -> None:
+        from oracle.registry import ProjectRegistry
+        from oracle.server import _cache_hits_counter, oracle_read
+
+        oracle_dir = tmp_path / ".oracle"
+        oracle_dir.mkdir()
+        (oracle_dir / "projects").mkdir()
+        project_dir = tmp_path / "proj"
+        project_dir.mkdir()
+        (project_dir / ".git").mkdir()
+        (project_dir / "foo.py").write_text("x = 1\n")
+
+        mock_add = mocker.patch.object(_cache_hits_counter, "add")
+        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
+        oracle_read(str(project_dir / "foo.py"))
+        mock_add.assert_not_called()
+
+
 class DescribeMainEntryPoint:
     """Test the main() entry point."""
 

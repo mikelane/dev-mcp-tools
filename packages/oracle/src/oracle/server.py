@@ -8,9 +8,28 @@ import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
+from mcp_shared.telemetry import get_meter, get_tracer, init_telemetry, trace_tool
 
 from oracle.project import ProjectState
 from oracle.registry import ProjectRegistry
+
+# Initialize telemetry for Oracle
+init_telemetry("project-oracle")
+
+_tracer = get_tracer("oracle.server")
+_meter = get_meter("oracle.server")
+_tool_calls_counter = _meter.create_counter(
+    "oracle.tool.calls",
+    description="Number of Oracle MCP tool invocations",
+)
+_cache_hits_counter = _meter.create_counter(
+    "oracle.cache.hits",
+    description="Number of cache hits across all tools",
+)
+_tokens_saved_counter = _meter.create_counter(
+    "oracle.tokens.saved",
+    description="Total estimated tokens saved by caching",
+)
 
 mcp = FastMCP(
     "project-oracle",
@@ -46,9 +65,10 @@ def _ensure_caches(project: ProjectState) -> None:
 
 def _before_tool() -> None:
     """Drain the ingest queue and pre-populate caches before every tool call."""
-    from oracle.ingest_bridge import process_ingest
+    with _tracer.start_as_current_span("oracle.before_tool"):
+        from oracle.ingest_bridge import process_ingest
 
-    process_ingest(_registry, _oracle_dir, _ensure_caches)
+        process_ingest(_registry, _oracle_dir, _ensure_caches)
 
 
 def _log(
@@ -64,9 +84,16 @@ def _log(
     project.store.log_interaction(
         project.session_id, tool_name, input_data, cache_hit, tokens_saved, int(time.time())
     )
+    # Emit OTel metrics
+    _tool_calls_counter.add(1, {"tool_name": tool_name})
+    if cache_hit:
+        _cache_hits_counter.add(1, {"tool_name": tool_name})
+    if tokens_saved > 0:
+        _tokens_saved_counter.add(tokens_saved, {"tool_name": tool_name})
 
 
 @mcp.tool()
+@trace_tool("oracle_read")
 def oracle_read(path: str) -> str:
     """Read a file, returning full content on first read or a compact delta on repeat reads."""
     _before_tool()
@@ -86,6 +113,7 @@ def oracle_read(path: str) -> str:
 
 
 @mcp.tool()
+@trace_tool("oracle_grep")
 def oracle_grep(pattern: str, path: str = ".") -> str:
     """Search source files for a regex pattern. Returns up to 50 matches."""
     _before_tool()
@@ -107,6 +135,7 @@ def oracle_grep(pattern: str, path: str = ".") -> str:
 
 
 @mcp.tool()
+@trace_tool("oracle_status")
 def oracle_status() -> str:
     """Return current project status: stack info, git branch, clean/dirty state."""
     _before_tool()
@@ -130,6 +159,7 @@ def oracle_status() -> str:
 
 
 @mcp.tool()
+@trace_tool("oracle_run")
 def oracle_run(commands: list[str]) -> str:
     """Run allowlisted commands through the cache layer. Returns cached results when unchanged."""
     _before_tool()
@@ -162,6 +192,7 @@ def oracle_run(commands: list[str]) -> str:
 
 
 @mcp.tool()
+@trace_tool("oracle_ask")
 def oracle_ask(question: str) -> str:
     """Ask a natural-language question about the project. Routes to cache, grep, or Haiku."""
     _before_tool()
@@ -177,6 +208,7 @@ def oracle_ask(question: str) -> str:
 
 
 @mcp.tool()
+@trace_tool("oracle_forget")
 def oracle_forget(path: str) -> str:
     """Clear the file cache for a path. Next oracle_read returns full content."""
     _before_tool()
@@ -195,6 +227,7 @@ def oracle_forget(path: str) -> str:
 
 
 @mcp.tool()
+@trace_tool("oracle_stats")
 def oracle_stats() -> str:
     """Return token savings stats for the current session and cumulative across all sessions."""
     _before_tool()
