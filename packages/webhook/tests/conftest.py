@@ -11,6 +11,12 @@ from github_webhook_mcp.models import WebhookEvent
 from github_webhook_mcp.storage import EventStore
 
 
+@pytest.fixture(autouse=True)
+def _disable_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable OpenTelemetry for all webhook tests."""
+    monkeypatch.setenv("ORACLE_TELEMETRY_ENABLED", "false")
+
+
 @pytest_asyncio.fixture
 async def store(tmp_path: Path) -> AsyncIterator[EventStore]:
     db_path = str(tmp_path / "test_events.db")

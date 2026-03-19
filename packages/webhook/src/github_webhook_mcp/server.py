@@ -8,6 +8,9 @@ from datetime import datetime, timedelta, timezone
 from fastmcp import FastMCP
 
 from .storage import EventStore
+from .telemetry import init_webhook_telemetry, query_results_counter, trace_tool_async
+
+init_webhook_telemetry()
 
 mcp = FastMCP("github-webhooks")
 
@@ -40,6 +43,7 @@ def _default_since() -> datetime:
 
 
 @mcp.tool()
+@trace_tool_async("get_pending_reviews")
 async def get_pending_reviews(repo: str | None = None) -> str:
     """Get pull requests awaiting my review.
 
@@ -67,10 +71,12 @@ async def get_pending_reviews(repo: str | None = None) -> str:
             "requested_at": webhook_event.received_at.isoformat(),
         })
 
+    query_results_counter.add(len(pending_reviews), {"tool.name": "get_pending_reviews"})
     return json.dumps(pending_reviews, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_review_feedback")
 async def get_review_feedback(pr_number: int, repo: str) -> str:
     """Get review comments on a specific pull request.
 
@@ -103,10 +109,12 @@ async def get_review_feedback(pr_number: int, repo: str) -> str:
             "submitted_at": webhook_event.received_at.isoformat(),
         })
 
+    query_results_counter.add(len(feedback_entries), {"tool.name": "get_review_feedback"})
     return json.dumps(feedback_entries, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_ci_status")
 async def get_ci_status(pr_number: int | None = None, repo: str | None = None) -> str:
     """Get CI/CD status, filtered to failures by default.
 
@@ -138,10 +146,12 @@ async def get_ci_status(pr_number: int | None = None, repo: str | None = None) -
                 "completed_at": webhook_event.received_at.isoformat(),
             })
 
+    query_results_counter.add(len(ci_failures), {"tool.name": "get_ci_status"})
     return json.dumps(ci_failures, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_new_prs")
 async def get_new_prs(repo: str | None = None, since: str | None = None) -> str:
     """Get recently opened pull requests.
 
@@ -170,10 +180,12 @@ async def get_new_prs(repo: str | None = None, since: str | None = None) -> str:
             "opened_at": webhook_event.received_at.isoformat(),
         })
 
+    query_results_counter.add(len(opened_prs), {"tool.name": "get_new_prs"})
     return json.dumps(opened_prs, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_notifications")
 async def get_notifications(since: str | None = None) -> str:
     """Get all webhook events since a given time, grouped by repo.
 
@@ -194,4 +206,5 @@ async def get_notifications(since: str | None = None) -> str:
             "summary": " ".join(filter(None, [webhook_event.sender, webhook_event.action, webhook_event.event_type, "on", webhook_event.repo])),
         })
 
+    query_results_counter.add(len(notification_summaries), {"tool.name": "get_notifications"})
     return json.dumps(notification_summaries, indent=2)

@@ -14,8 +14,11 @@ from httpx_sse import aconnect_sse
 from .models import SmeeEvent, WebhookEvent
 from .signature import verify_signature
 from .storage import EventStore
+from .telemetry import events_received_counter, get_tracer
 
 logger = logging.getLogger(__name__)
+
+_tracer = get_tracer("webhook.smee_client")
 
 
 @runtime_checkable
@@ -61,60 +64,72 @@ class SmeeClient:
         Args:
             raw_data: The raw JSON string from the Smee.io SSE stream.
         """
-        try:
-            smee_envelope = json.loads(raw_data)
-        except json.JSONDecodeError:
-            logger.warning("Received non-JSON SSE data, skipping")
-            return
+        with _tracer.start_as_current_span("smee.process_message") as span:
+            try:
+                smee_envelope = json.loads(raw_data)
+            except json.JSONDecodeError:
+                logger.warning("Received non-JSON SSE data, skipping")
+                return
 
-        if "body" not in smee_envelope:
-            return
+            if "body" not in smee_envelope:
+                return
 
-        event = SmeeEvent(
-            body=smee_envelope["body"],
-            x_github_event=smee_envelope.get("x-github-event"),
-            x_github_delivery=smee_envelope.get("x-github-delivery"),
-            x_hub_signature_256=smee_envelope.get("x-hub-signature-256"),
-        )
-
-        if not event.repo_full_name:
-            logger.debug(
-                "Event has no repository, skipping: %s", event.x_github_delivery
-            )
-            return
-
-        # Signature verification is best-effort with Smee.io. Smee re-serializes
-        # the JSON body, so json.dumps() produces different bytes than what GitHub
-        # originally signed. The Smee channel URL itself is the security boundary.
-        payload_bytes = json.dumps(event.body).encode()
-        if event.x_hub_signature_256 and not verify_signature(
-            payload_bytes, event.x_hub_signature_256, self.webhook_secret
-        ):
-            logger.debug(
-                "Signature mismatch for delivery %s (expected with Smee proxy)",
-                event.x_github_delivery,
+            event = SmeeEvent(
+                body=smee_envelope["body"],
+                x_github_event=smee_envelope.get("x-github-event"),
+                x_github_delivery=smee_envelope.get("x-github-delivery"),
+                x_hub_signature_256=smee_envelope.get("x-hub-signature-256"),
             )
 
-        webhook_event = WebhookEvent(
-            received_at=datetime.now(timezone.utc),
-            delivery_id=event.x_github_delivery or "",
-            repo=event.repo_full_name,
-            event_type=event.x_github_event or "unknown",
-            action=event.action,
-            sender=event.sender_login,
-            payload=event.body,
-        )
+            if not event.repo_full_name:
+                logger.debug(
+                    "Event has no repository, skipping: %s", event.x_github_delivery
+                )
+                return
 
-        await self.store.store_event(webhook_event)
+            span.set_attribute("smee.event_type", event.x_github_event or "unknown")
+            span.set_attribute("smee.delivery_id", event.x_github_delivery or "")
+            span.set_attribute("smee.repo", event.repo_full_name)
 
-        if self.reactor and webhook_event.event_type == "pull_request" and webhook_event.action:
-            pr_number = webhook_event.payload.get("number")
-            if isinstance(pr_number, int):
-                await self.reactor.on_pr_event(
-                    webhook_event.repo, pr_number, webhook_event.action
+            # Signature verification is best-effort with Smee.io. Smee re-serializes
+            # the JSON body, so json.dumps() produces different bytes than what GitHub
+            # originally signed. The Smee channel URL itself is the security boundary.
+            payload_bytes = json.dumps(event.body).encode()
+            if event.x_hub_signature_256 and not verify_signature(
+                payload_bytes, event.x_hub_signature_256, self.webhook_secret
+            ):
+                logger.debug(
+                    "Signature mismatch for delivery %s (expected with Smee proxy)",
+                    event.x_github_delivery,
                 )
 
-        self._backoff = 1.0
+            webhook_event = WebhookEvent(
+                received_at=datetime.now(timezone.utc),
+                delivery_id=event.x_github_delivery or "",
+                repo=event.repo_full_name,
+                event_type=event.x_github_event or "unknown",
+                action=event.action,
+                sender=event.sender_login,
+                payload=event.body,
+            )
+
+            await self.store.store_event(webhook_event)
+            events_received_counter.add(
+                1,
+                {
+                    "event.type": webhook_event.event_type,
+                    "event.repo": webhook_event.repo,
+                },
+            )
+
+            if self.reactor and webhook_event.event_type == "pull_request" and webhook_event.action:
+                pr_number = webhook_event.payload.get("number")
+                if isinstance(pr_number, int):
+                    await self.reactor.on_pr_event(
+                        webhook_event.repo, pr_number, webhook_event.action
+                    )
+
+            self._backoff = 1.0
 
     async def listen(self) -> None:
         """Connect to the Smee channel and process events indefinitely.
@@ -125,14 +140,16 @@ class SmeeClient:
         while True:
             try:
                 logger.info("Connecting to Smee channel: %s", self.channel_url)
-                async with httpx.AsyncClient(timeout=None) as client:
-                    async with aconnect_sse(
-                        client, "GET", self.channel_url
-                    ) as source:
-                        self._backoff = 1.0
-                        async for sse_event in source.aiter_sse():
-                            if sse_event.data:
-                                await self.process_sse_message(sse_event.data)
+                with _tracer.start_as_current_span("smee.connection") as conn_span:
+                    conn_span.set_attribute("smee.channel_url", self.channel_url)
+                    async with httpx.AsyncClient(timeout=None) as client:
+                        async with aconnect_sse(
+                            client, "GET", self.channel_url
+                        ) as source:
+                            self._backoff = 1.0
+                            async for sse_event in source.aiter_sse():
+                                if sse_event.data:
+                                    await self.process_sse_message(sse_event.data)
             except (
                 httpx.ConnectError,
                 httpx.ReadError,
