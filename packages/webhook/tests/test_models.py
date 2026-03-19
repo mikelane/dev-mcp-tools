@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from github_webhook_mcp.models import SmeeEvent, WebhookEvent
-
 
 # --- WebhookEvent ---
 
@@ -13,7 +12,7 @@ from github_webhook_mcp.models import SmeeEvent, WebhookEvent
 def test_webhook_event_required_fields():
     """WebhookEvent can be constructed with all required fields."""
     event = WebhookEvent(
-        received_at=datetime(2025, 3, 15, tzinfo=timezone.utc),
+        received_at=datetime(2025, 3, 15, tzinfo=UTC),
         delivery_id="abc-123",
         repo="owner/repo",
         event_type="push",
@@ -29,7 +28,7 @@ def test_webhook_event_required_fields():
 def test_webhook_event_optional_fields_default_to_none():
     """Optional fields (id, action, sender) default to None."""
     event = WebhookEvent(
-        received_at=datetime(2025, 3, 15, tzinfo=timezone.utc),
+        received_at=datetime(2025, 3, 15, tzinfo=UTC),
         delivery_id="abc",
         repo="owner/repo",
         event_type="push",
@@ -45,7 +44,7 @@ def test_webhook_event_with_all_fields():
     """WebhookEvent populated with every field retains them."""
     event = WebhookEvent(
         id=42,
-        received_at=datetime(2025, 3, 15, 12, 0, 0, tzinfo=timezone.utc),
+        received_at=datetime(2025, 3, 15, 12, 0, 0, tzinfo=UTC),
         delivery_id="delivery-999",
         repo="mikelane/test-repo",
         event_type="pull_request",
@@ -55,7 +54,7 @@ def test_webhook_event_with_all_fields():
     )
 
     assert event.id == 42
-    assert event.received_at == datetime(2025, 3, 15, 12, 0, 0, tzinfo=timezone.utc)
+    assert event.received_at == datetime(2025, 3, 15, 12, 0, 0, tzinfo=UTC)
     assert event.action == "opened"
     assert event.sender == "octocat"
 

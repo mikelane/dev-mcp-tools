@@ -8,8 +8,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from pytest_mock import MockerFixture
-
 from oracle.cache.command_cache import (
     DEFAULT_ALLOWLIST,
     CommandCache,
@@ -17,6 +15,7 @@ from oracle.cache.command_cache import (
 )
 from oracle.formatting import format_elapsed
 from oracle.storage.store import OracleStore
+from pytest_mock import MockerFixture
 
 
 @pytest.fixture
@@ -46,7 +45,7 @@ def cache(store: OracleStore, project: Path) -> CommandCache:
 @pytest.mark.small
 class DescribeFormatElapsed:
     @pytest.mark.parametrize(
-        "seconds,expected",
+        ("seconds", "expected"),
         [
             (5, "5s"),
             (59, "59s"),

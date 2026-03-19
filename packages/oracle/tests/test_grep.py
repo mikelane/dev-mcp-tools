@@ -6,9 +6,8 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from pytest_mock import MockerFixture
-
 from oracle.tools.grep import handle_oracle_grep
+from pytest_mock import MockerFixture
 
 
 @pytest.mark.medium

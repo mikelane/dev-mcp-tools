@@ -15,8 +15,9 @@ def handle_oracle_insights(store: OracleStore) -> str:
     pairs = gen.top_file_pairs(limit=5)
     if pairs:
         lines = ["File pairs (always read together):"]
-        for p in pairs:
-            lines.append(f"  {p['file_a']} ↔ {p['file_b']}  ({p['session_count']} sessions)")
+        lines.extend(
+            f"  {p['file_a']} ↔ {p['file_b']}  ({p['session_count']} sessions)" for p in pairs
+        )
         sections.append("\n".join(lines))
 
     rereads = gen.frequently_reread_files(min_reads=3)

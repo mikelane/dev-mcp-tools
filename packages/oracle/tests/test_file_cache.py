@@ -6,7 +6,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 from oracle.cache.file_cache import FileCache
 from oracle.storage.store import OracleStore
 
@@ -26,7 +25,7 @@ def cache(store: OracleStore) -> FileCache:
 
 class DescribeFormatElapsed:
     @pytest.mark.parametrize(
-        "seconds,expected",
+        ("seconds", "expected"),
         [
             (30, "30s"),
             (90, "1m"),
@@ -194,7 +193,7 @@ class DescribeFileCacheSizeLimit:
         # Write exactly _MAX_FILE_SIZE bytes (should be accepted)
         f.write_bytes(b"x" * _MAX_FILE_SIZE)
 
-        result, tokens_saved = cache.smart_read_with_stats(str(f))
+        result, _tokens_saved = cache.smart_read_with_stats(str(f))
         assert "file too large" not in result.lower()
 
 

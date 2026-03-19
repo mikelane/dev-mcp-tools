@@ -3,9 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pydantic import ValidationError
-
 from github_webhook_mcp.config import Settings
+from pydantic import ValidationError
 
 
 def test_settings_loads_from_env(monkeypatch: pytest.MonkeyPatch) -> None:

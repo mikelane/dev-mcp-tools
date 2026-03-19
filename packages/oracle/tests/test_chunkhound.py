@@ -5,9 +5,8 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-from pytest_mock import MockerFixture
-
 from oracle.integrations.chunkhound import ChunkhoundClient
+from pytest_mock import MockerFixture
 
 
 class DescribeChunkhoundClient:

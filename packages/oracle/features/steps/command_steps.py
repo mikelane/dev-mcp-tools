@@ -1,7 +1,6 @@
 """Step definitions for command result caching scenarios."""
 
 from behave import given, when
-
 from oracle.cache.command_cache import CommandCache, CommandNotAllowedError
 from oracle.storage.store import OracleStore
 

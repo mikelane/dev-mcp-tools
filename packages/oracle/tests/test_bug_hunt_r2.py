@@ -6,11 +6,10 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from pytest_mock import MockerFixture
-
 from oracle.cache.command_cache import CommandCache
 from oracle.cache.file_cache import FileCache
 from oracle.storage.store import OracleStore
+from pytest_mock import MockerFixture
 
 
 @pytest.fixture

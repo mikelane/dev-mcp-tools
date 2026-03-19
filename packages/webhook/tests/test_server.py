@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import pytest
 import pytest_asyncio
-
 from github_webhook_mcp.models import WebhookEvent
 from github_webhook_mcp.server import (
     _require_store,
@@ -47,7 +46,7 @@ def _make_webhook_event(
     if payload_extra:
         payload.update(payload_extra)
     return WebhookEvent(
-        received_at=datetime.now(timezone.utc),
+        received_at=datetime.now(UTC),
         delivery_id=delivery_id,
         repo=repo,
         event_type=event_type,
@@ -176,7 +175,7 @@ async def test_get_notifications_summary_no_double_space_when_action_is_none(
 ) -> None:
     """When action is None the summary must not contain a double space."""
     webhook_event = WebhookEvent(
-        received_at=datetime.now(timezone.utc),
+        received_at=datetime.now(UTC),
         delivery_id="d-no-action",
         repo="mikelane/test-repo",
         event_type="push",
@@ -483,7 +482,7 @@ async def test_get_new_prs_filters_by_repo(store: EventStore) -> None:
 @pytest.mark.asyncio
 async def test_get_new_prs_filters_by_since(store: EventStore) -> None:
     """When since is specified, only PRs after that time are returned."""
-    old_time = datetime(2020, 6, 1, tzinfo=timezone.utc)
+    old_time = datetime(2020, 6, 1, tzinfo=UTC)
     old_webhook_event = WebhookEvent(
         received_at=old_time,
         delivery_id="d-pr-old",
@@ -506,7 +505,7 @@ async def test_get_new_prs_filters_by_since(store: EventStore) -> None:
     await store.store_event(old_webhook_event)
 
     recent_webhook_event = WebhookEvent(
-        received_at=datetime.now(timezone.utc),
+        received_at=datetime.now(UTC),
         delivery_id="d-pr-new",
         repo="mikelane/test-repo",
         event_type="pull_request",
@@ -526,7 +525,7 @@ async def test_get_new_prs_filters_by_since(store: EventStore) -> None:
     )
     await store.store_event(recent_webhook_event)
 
-    since_iso = datetime(2024, 1, 1, tzinfo=timezone.utc).isoformat()
+    since_iso = datetime(2024, 1, 1, tzinfo=UTC).isoformat()
     raw_response = await get_new_prs(since=since_iso)
     opened_prs = json.loads(raw_response)
 

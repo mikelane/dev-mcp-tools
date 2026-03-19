@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 import httpx
@@ -82,9 +82,7 @@ class SmeeClient:
             )
 
             if not event.repo_full_name:
-                logger.debug(
-                    "Event has no repository, skipping: %s", event.x_github_delivery
-                )
+                logger.debug("Event has no repository, skipping: %s", event.x_github_delivery)
                 return
 
             span.set_attribute("smee.event_type", event.x_github_event or "unknown")
@@ -104,7 +102,7 @@ class SmeeClient:
                 )
 
             webhook_event = WebhookEvent(
-                received_at=datetime.now(timezone.utc),
+                received_at=datetime.now(UTC),
                 delivery_id=event.x_github_delivery or "",
                 repo=event.repo_full_name,
                 event_type=event.x_github_event or "unknown",
@@ -122,11 +120,7 @@ class SmeeClient:
                 },
             )
 
-            if (
-                self.reactor
-                and webhook_event.event_type == "pull_request"
-                and webhook_event.action
-            ):
+            if self.reactor and webhook_event.event_type == "pull_request" and webhook_event.action:
                 pr_number = webhook_event.payload.get("number")
                 if isinstance(pr_number, int):
                     await self.reactor.on_pr_event(
@@ -146,14 +140,16 @@ class SmeeClient:
                 logger.info("Connecting to Smee channel: %s", self.channel_url)
                 with _tracer.start_as_current_span("smee.connection") as conn_span:
                     conn_span.set_attribute("smee.channel_url", self.channel_url)
-                    async with httpx.AsyncClient(timeout=None) as client:
-                        async with aconnect_sse(
+                    async with (
+                        httpx.AsyncClient(timeout=None) as client,
+                        aconnect_sse(  # noqa: S113
                             client, "GET", self.channel_url
-                        ) as source:
-                            self._backoff = 1.0
-                            async for sse_event in source.aiter_sse():
-                                if sse_event.data:
-                                    await self.process_sse_message(sse_event.data)
+                        ) as source,
+                    ):
+                        self._backoff = 1.0
+                        async for sse_event in source.aiter_sse():
+                            if sse_event.data:
+                                await self.process_sse_message(sse_event.data)
             except (
                 httpx.ConnectError,
                 httpx.ReadError,

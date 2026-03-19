@@ -7,10 +7,9 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from pytest_mock import MockerFixture
-
 from oracle.project import ProjectState, StackInfo
 from oracle.storage.store import OracleStore
+from pytest_mock import MockerFixture
 
 
 @pytest.fixture(autouse=True)

@@ -22,9 +22,7 @@ def test_valid_signature_returns_true() -> None:
 
 def test_invalid_signature_returns_false() -> None:
     payload = b'{"action": "opened"}'
-    signature = (
-        "sha256=0000000000000000000000000000000000000000000000000000000000000000"
-    )
+    signature = "sha256=0000000000000000000000000000000000000000000000000000000000000000"
 
     assert verify_signature(payload, signature, SECRET) is False
 

@@ -1,0 +1,31 @@
+pre-commit:
+  parallel: true
+  commands:
+    ruff-fix:
+      glob: "*.py"
+      run: uv run ruff check --fix {staged_files} && git add {staged_files}
+      stage_fixed: true
+    ruff-format:
+      glob: "*.py"
+      run: uv run ruff format {staged_files} && git add {staged_files}
+      stage_fixed: true
+
+pre-push:
+  parallel: false
+  commands:
+    ruff-check:
+      glob: "*.py"
+      run: uv run ruff check .
+    ruff-format-check:
+      glob: "*.py"
+      run: uv run ruff format --check .
+    mypy-oracle:
+      run: uv run mypy packages/oracle/src
+    mypy-shared:
+      run: uv run mypy packages/shared/src
+    test-shared:
+      run: uv run --package mcp-shared pytest packages/shared/tests/ -q
+    test-oracle:
+      run: uv run --package project-oracle pytest packages/oracle/tests/ -q
+    test-webhook:
+      run: uv run --package github-webhook-mcp pytest packages/webhook/tests/ -q

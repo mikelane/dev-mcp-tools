@@ -59,3 +59,9 @@ jobs:
 
       - name: Ruff format check
         run: uv run ruff format --check .
+
+      - name: Mypy (oracle)
+        run: uv run mypy packages/oracle/src
+
+      - name: Mypy (shared)
+        run: uv run mypy packages/shared/src

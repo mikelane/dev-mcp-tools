@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import functools
 import inspect
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from mcp_shared.telemetry import get_meter, get_tracer, init_telemetry
 from opentelemetry import trace

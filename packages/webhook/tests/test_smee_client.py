@@ -7,7 +7,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from github_webhook_mcp.reactor import PRReactor
 from github_webhook_mcp.smee_client import SmeeClient
 from github_webhook_mcp.storage import EventStore
@@ -22,9 +21,7 @@ def _make_smee_envelope(
 ) -> dict[str, Any]:
     """Build a Smee SSE envelope dict matching Smee.io's format."""
     payload_bytes = json.dumps(body).encode()
-    signature = (
-        "sha256=" + hmac.new(SECRET.encode(), payload_bytes, hashlib.sha256).hexdigest()
-    )
+    signature = "sha256=" + hmac.new(SECRET.encode(), payload_bytes, hashlib.sha256).hexdigest()
     return {
         "body": body,
         "x-github-event": event,
@@ -118,9 +115,7 @@ async def test_pr_event_notifies_reactor(store: EventStore) -> None:
         "sender": {"login": "dev"},
         "pull_request": {"number": 77, "title": "New feature"},
     }
-    smee_envelope = _make_smee_envelope(
-        body, event="pull_request", delivery="d-pr-notify"
-    )
+    smee_envelope = _make_smee_envelope(body, event="pull_request", delivery="d-pr-notify")
 
     await client.process_sse_message(json.dumps(smee_envelope))
 
@@ -169,9 +164,7 @@ async def test_non_pr_event_does_not_notify_reactor(store: EventStore) -> None:
         "repository": {"full_name": "mikelane/repo"},
         "sender": {"login": "bot"},
     }
-    smee_envelope = _make_smee_envelope(
-        body, event="push", delivery="d-push-no-reactor"
-    )
+    smee_envelope = _make_smee_envelope(body, event="push", delivery="d-push-no-reactor")
 
     await client.process_sse_message(json.dumps(smee_envelope))
 
@@ -201,9 +194,7 @@ async def test_pr_event_without_number_does_not_notify_reactor(
         "repository": {"full_name": "mikelane/repo"},
         "sender": {"login": "dev"},
     }
-    smee_envelope = _make_smee_envelope(
-        body, event="pull_request", delivery="d-pr-no-num"
-    )
+    smee_envelope = _make_smee_envelope(body, event="pull_request", delivery="d-pr-no-num")
 
     await client.process_sse_message(json.dumps(smee_envelope))
 

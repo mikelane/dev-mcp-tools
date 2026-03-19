@@ -437,6 +437,20 @@ name = "dev-mcp-tools"
 version = "0.1.0"
 source = { virtual = "." }
 
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=1.14" },
+    { name = "ruff", specifier = ">=0.9" },
+]
+
 [[package]]
 name = "distro"
 version = "1.9.0"
@@ -1269,13 +1283,11 @@ dev = [
     { name = "behave" },
     { name = "coverage" },
     { name = "hypothesis" },
-    { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-gremlins" },
     { name = "pytest-mock" },
     { name = "pytest-test-categories" },
-    { name = "ruff" },
 ]
 
 [package.metadata]
@@ -1286,13 +1298,11 @@ requires-dist = [
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6.100" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.0" },
     { name = "mcp-shared", editable = "packages/shared" },
-    { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.14" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
     { name = "pytest-gremlins", marker = "extra == 'dev'", specifier = ">=1.5" },
     { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14" },
     { name = "pytest-test-categories", marker = "extra == 'dev'", specifier = ">=1.2" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.9" },
     { name = "watchfiles", specifier = ">=1.0" },
     { name = "zstandard", specifier = ">=0.23" },
 ]

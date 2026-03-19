@@ -6,14 +6,13 @@ import hashlib
 import hmac
 import json
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
-
 from github_webhook_mcp.models import WebhookEvent
 from github_webhook_mcp.server import (
     get_ci_status,
@@ -51,7 +50,7 @@ def _make_webhook_event(
     if payload_extra:
         payload.update(payload_extra)
     return WebhookEvent(
-        received_at=datetime.now(timezone.utc),
+        received_at=datetime.now(UTC),
         delivery_id=delivery_id,
         repo=repo,
         event_type=event_type,
@@ -285,9 +284,7 @@ async def test_smee_client_increments_events_received_counter(
         "sender": {"login": "octocat"},
     }
     payload_bytes = json.dumps(body).encode()
-    signature = (
-        "sha256=" + hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
-    )
+    signature = "sha256=" + hmac.new(secret.encode(), payload_bytes, hashlib.sha256).hexdigest()
     envelope = json.dumps(
         {
             "body": body,
@@ -304,9 +301,7 @@ async def test_smee_client_increments_events_received_counter(
         call_args_list.append(args)
         original_add(*args, **kwargs)
 
-    with patch.object(
-        telemetry.events_received_counter, "add", side_effect=tracking_add
-    ):
+    with patch.object(telemetry.events_received_counter, "add", side_effect=tracking_add):
         await client.process_sse_message(envelope)
 
     assert len(call_args_list) == 1
@@ -335,9 +330,7 @@ async def test_smee_client_does_not_increment_counter_for_non_json(
         call_args_list.append(args)
         original_add(*args, **kwargs)
 
-    with patch.object(
-        telemetry.events_received_counter, "add", side_effect=tracking_add
-    ):
+    with patch.object(telemetry.events_received_counter, "add", side_effect=tracking_add):
         await client.process_sse_message("not json")
 
     assert len(call_args_list) == 0
@@ -351,7 +344,7 @@ async def test_eventstore_stores_and_retrieves_with_spans(
     store: EventStore,
 ) -> None:
     event = WebhookEvent(
-        received_at=datetime.now(timezone.utc),
+        received_at=datetime.now(UTC),
         delivery_id="d-store-tel-1",
         repo="mikelane/test-repo",
         event_type="push",
@@ -373,7 +366,7 @@ async def test_eventstore_handles_duplicates_with_spans(
     store: EventStore,
 ) -> None:
     event = WebhookEvent(
-        received_at=datetime.now(timezone.utc),
+        received_at=datetime.now(UTC),
         delivery_id="d-store-tel-dup",
         repo="mikelane/test-repo",
         event_type="push",

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastmcp import FastMCP
 
@@ -25,7 +25,7 @@ def init_server(store: EventStore, username: str = "mikelane") -> None:
         store: The initialized :class:`EventStore` to query.
         username: The GitHub username used to filter review requests.
     """
-    global _store, _username  # noqa: PLW0603
+    global _store, _username
     _store = store
     _username = username
 
@@ -39,7 +39,7 @@ def _require_store() -> EventStore:
 
 def _default_since() -> datetime:
     """Return a timestamp 24 hours ago in UTC."""
-    return datetime.now(timezone.utc) - timedelta(hours=24)
+    return datetime.now(UTC) - timedelta(hours=24)
 
 
 @mcp.tool()
@@ -73,9 +73,7 @@ async def get_pending_reviews(repo: str | None = None) -> str:
             }
         )
 
-    query_results_counter.add(
-        len(pending_reviews), {"tool.name": "get_pending_reviews"}
-    )
+    query_results_counter.add(len(pending_reviews), {"tool.name": "get_pending_reviews"})
     return json.dumps(pending_reviews, indent=2)
 
 
@@ -115,9 +113,7 @@ async def get_review_feedback(pr_number: int, repo: str) -> str:
             }
         )
 
-    query_results_counter.add(
-        len(feedback_entries), {"tool.name": "get_review_feedback"}
-    )
+    query_results_counter.add(len(feedback_entries), {"tool.name": "get_review_feedback"})
     return json.dumps(feedback_entries, indent=2)
 
 
@@ -156,8 +152,7 @@ async def get_ci_status(pr_number: int | None = None, repo: str | None = None) -
                     "conclusion": conclusion,
                     "url": ci_run_payload.get("html_url"),
                     "pr_numbers": [
-                        pr.get("number")
-                        for pr in ci_run_payload.get("pull_requests", [])
+                        pr.get("number") for pr in ci_run_payload.get("pull_requests", [])
                     ],
                     "completed_at": webhook_event.received_at.isoformat(),
                 }
@@ -214,31 +209,28 @@ async def get_notifications(since: str | None = None) -> str:
     since_dt = datetime.fromisoformat(since) if since else _default_since()
     events = await _require_store().get_events(since=since_dt)
 
-    notification_summaries = []
-    for webhook_event in events:
-        notification_summaries.append(
-            {
-                "repo": webhook_event.repo,
-                "event_type": webhook_event.event_type,
-                "action": webhook_event.action,
-                "sender": webhook_event.sender,
-                "received_at": webhook_event.received_at.isoformat(),
-                "summary": " ".join(
-                    filter(
-                        None,
-                        [
-                            webhook_event.sender,
-                            webhook_event.action,
-                            webhook_event.event_type,
-                            "on",
-                            webhook_event.repo,
-                        ],
-                    )
-                ),
-            }
-        )
+    notification_summaries = [
+        {
+            "repo": webhook_event.repo,
+            "event_type": webhook_event.event_type,
+            "action": webhook_event.action,
+            "sender": webhook_event.sender,
+            "received_at": webhook_event.received_at.isoformat(),
+            "summary": " ".join(
+                filter(
+                    None,
+                    [
+                        webhook_event.sender,
+                        webhook_event.action,
+                        webhook_event.event_type,
+                        "on",
+                        webhook_event.repo,
+                    ],
+                )
+            ),
+        }
+        for webhook_event in events
+    ]
 
-    query_results_counter.add(
-        len(notification_summaries), {"tool.name": "get_notifications"}
-    )
+    query_results_counter.add(len(notification_summaries), {"tool.name": "get_notifications"})
     return json.dumps(notification_summaries, indent=2)

@@ -6,7 +6,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 from oracle.analytics.tracker import AnalyticsTracker
 from oracle.storage.store import OracleStore
 

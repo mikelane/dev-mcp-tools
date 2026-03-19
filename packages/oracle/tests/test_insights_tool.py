@@ -6,7 +6,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 from oracle.storage.store import OracleStore
 from oracle.tools.insights import handle_oracle_insights
 

@@ -47,8 +47,8 @@ async def _run() -> None:
         reactor.auto_review_repo,
         reactor.debounce_seconds,
     )
-    asyncio.create_task(smee.listen())
-    asyncio.create_task(_prune_loop(store, settings.prune_days))
+    _smee_task = asyncio.create_task(smee.listen())  # noqa: RUF006
+    _prune_task = asyncio.create_task(_prune_loop(store, settings.prune_days))  # noqa: RUF006
 
     logger.info("Starting MCP server on port %d", settings.mcp_port)
     await mcp.run_async(transport="sse", port=settings.mcp_port)

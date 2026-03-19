@@ -113,7 +113,7 @@ class PRReactor:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
-                stdout, stderr = await review_process.communicate()
+                _stdout, stderr = await review_process.communicate()
                 if review_process.returncode == 0:
                     logger.info("Review complete for %s#%d", repo, pr_number)
                     span.set_attribute("reactor.review_success", True)

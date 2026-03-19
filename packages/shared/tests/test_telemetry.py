@@ -6,7 +6,6 @@ import os
 from unittest.mock import patch
 
 import pytest
-
 from mcp_shared.telemetry import (
     _is_enabled,
     get_meter,

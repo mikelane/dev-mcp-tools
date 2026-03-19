@@ -7,10 +7,9 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from oracle.watcher import OracleWatcher, _source_filter
 from pytest_mock import MockerFixture
 from watchfiles import Change
-
-from oracle.watcher import OracleWatcher, _source_filter
 
 
 async def _fake_awatch(
@@ -31,7 +30,8 @@ async def _fake_awatch(
             return
         # Apply the watch_filter if provided (just like real awatch does)
         if watch_filter:
-            change_set = {(c, p) for c, p in change_set if watch_filter(c, p)}
+            filtered = {(c, p) for c, p in change_set if watch_filter(c, p)}
+            change_set = filtered  # noqa: PLW2901
         if change_set:
             yield change_set
     # Wait for stop signal
@@ -45,7 +45,7 @@ class DescribeOracleWatcher:
         detected: list[str] = []
 
         async def _inner() -> None:
-            watcher = OracleWatcher(Path("/project"), lambda p: detected.append(p))
+            watcher = OracleWatcher(Path("/project"), detected.append)
             mocker.patch("oracle.watcher.awatch", new=_fake_awatch)
             task = asyncio.create_task(watcher.start())
             await asyncio.sleep(0.1)
@@ -61,7 +61,7 @@ class DescribeOracleWatcher:
         detected: list[str] = []
 
         async def _inner() -> None:
-            watcher = OracleWatcher(Path("/project"), lambda p: detected.append(p))
+            watcher = OracleWatcher(Path("/project"), detected.append)
             mocker.patch("oracle.watcher.awatch", new=_fake_awatch)
             task = asyncio.create_task(watcher.start())
             await asyncio.sleep(0.1)

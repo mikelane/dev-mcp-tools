@@ -8,3 +8,73 @@ members = ["packages/*"]
 
 [tool.uv.sources]
 mcp-shared = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "mypy>=1.14",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # bugbear
+    "SIM",  # simplify
+    "S",    # bandit security
+    "N",    # pep8-naming
+    "C4",   # flake8-comprehensions
+    "PT",   # pytest style
+    "RET",  # return statements
+    "ARG",  # unused arguments
+    "PTH",  # use pathlib
+    "ERA",  # commented-out code
+    "PL",   # pylint (C, E, R, W)
+    "RUF",  # ruff-specific
+    "PERF", # performance
+    "T20",  # no print statements
+    "DTZ",  # datetime timezone
+    "A",    # builtin shadowing
+    "TCH",  # type-checking imports
+    "FBT",  # boolean trap
+]
+ignore = [
+    "S101",    # assert used — fine in tests
+    "S603",    # subprocess without shell=True — we do this intentionally
+    "S607",    # partial executable path — acceptable for tool commands
+    "PLR0913", # too many arguments — some functions legitimately need them
+    "PLR2004", # magic value comparison — too noisy in tests
+    "FBT001",  # boolean positional arg — too strict for simple flags
+    "FBT002",  # boolean default value — too strict for simple flags
+    "FBT003",  # boolean positional value in call — too noisy
+    "PLC0415", # import outside top-level — deliberate lazy import pattern in server.py
+    "PLW0603", # global statement — used for session tracking
+    "TC001",   # typing-only first-party import — future cleanup
+    "TC002",   # typing-only third-party import — future cleanup
+    "TC003",   # typing-only stdlib import — future cleanup
+    "S608",    # hardcoded SQL — we build queries intentionally in store methods
+    "PLR0911", # too many return statements — some handlers need branching
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/**" = [
+    "S101",    # assert is the point of tests
+    "S105",    # hardcoded passwords in test data
+    "S106",    # hardcoded passwords in test fixtures
+    "S108",    # temp file paths in tests
+    "ARG",     # unused args common in fixtures
+    "PLR2004", # magic values fine in tests
+    "PT004",   # fixture doesn't return — fine
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
