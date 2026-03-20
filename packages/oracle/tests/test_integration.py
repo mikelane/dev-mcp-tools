@@ -7,7 +7,6 @@ import time
 from pathlib import Path
 
 import pytest
-
 from oracle.cache.file_cache import FileCache
 from oracle.ingest_bridge import process_ingest
 from oracle.project import ProjectState
@@ -54,11 +53,11 @@ class DescribeLoggingPipeline:
         file_path = str(target)
 
         # First read: cache miss, tokens_saved == 0
-        response1, tokens_saved1 = project.file_cache.smart_read_with_stats(file_path)
+        _response1, tokens_saved1 = project.file_cache.smart_read_with_stats(file_path)
         assert tokens_saved1 == 0
 
         # Second read: cache hit, tokens_saved > 0 (file unchanged)
-        response2, tokens_saved2 = project.file_cache.smart_read_with_stats(file_path)
+        _response2, tokens_saved2 = project.file_cache.smart_read_with_stats(file_path)
         assert tokens_saved2 > 0
 
         # Log both interactions
@@ -131,7 +130,7 @@ class DescribeIngestPipeline:
             project.file_cache = FileCache(project.store)
 
     @staticmethod
-    def _enqueue(oracle_dir: Path, entry: dict) -> None:  # noqa: ANN001
+    def _enqueue(oracle_dir: Path, entry: dict) -> None:
         """Write an entry into the ingest queue directory."""
         queue_dir = oracle_dir / "ingest"
         queue_dir.mkdir(exist_ok=True)
@@ -225,7 +224,7 @@ class DescribeCrossSessionCacheBehavior:
 
         # Session A: populate the cache
         cache_a = FileCache(store)
-        response_a, tokens_saved_a = cache_a.smart_read_with_stats(file_path)
+        _response_a, tokens_saved_a = cache_a.smart_read_with_stats(file_path)
         assert tokens_saved_a == 0  # first read is always a miss
 
         # Session B: new FileCache (fresh Python object), same OracleStore

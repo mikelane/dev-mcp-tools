@@ -42,9 +42,13 @@ async def _run() -> None:
     )
 
     logger.info("Starting Smee listener for %s", settings.smee_channel_url)
-    logger.info("PR reactor active for %s (debounce: %ds)", reactor.auto_review_repo, reactor.debounce_seconds)
-    asyncio.create_task(smee.listen())
-    asyncio.create_task(_prune_loop(store, settings.prune_days))
+    logger.info(
+        "PR reactor active for %s (debounce: %ds)",
+        reactor.auto_review_repo,
+        reactor.debounce_seconds,
+    )
+    _smee_task = asyncio.create_task(smee.listen())  # noqa: RUF006
+    _prune_task = asyncio.create_task(_prune_loop(store, settings.prune_days))  # noqa: RUF006
 
     logger.info("Starting MCP server on port %d", settings.mcp_port)
     await mcp.run_async(transport="sse", port=settings.mcp_port)

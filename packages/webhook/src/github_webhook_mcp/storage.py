@@ -4,14 +4,27 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
 
 import aiosqlite
+from opentelemetry import trace
 
 from .models import WebhookEvent
 
 logger = logging.getLogger(__name__)
+
+_tracer: trace.Tracer | None = None
+
+
+def _get_tracer() -> trace.Tracer:
+    global _tracer
+    if _tracer is None:
+        from .telemetry import get_tracer
+
+        _tracer = get_tracer("webhook.storage")
+    return _tracer
+
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS events (
@@ -68,27 +81,37 @@ class EventStore:
         Returns:
             ``True`` if the event was inserted, ``False`` if it was a duplicate.
         """
-        db = self._require_db()
-        try:
-            await db.execute(
-                """INSERT INTO events
-                   (received_at, delivery_id, repo, event_type, action, sender, payload)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    event.received_at.isoformat(),
-                    event.delivery_id,
-                    event.repo,
-                    event.event_type,
-                    event.action,
-                    event.sender,
-                    json.dumps(event.payload),
-                ),
-            )
-            await db.commit()
-            return True
-        except aiosqlite.IntegrityError:
-            logger.debug("Duplicate event ignored: %s", event.delivery_id)
-            return False
+        tracer = _get_tracer()
+        with tracer.start_as_current_span("eventstore.store_event") as span:
+            span.set_attribute("db.system", "sqlite")
+            span.set_attribute("db.operation", "INSERT")
+            span.set_attribute("event.delivery_id", event.delivery_id)
+            span.set_attribute("event.repo", event.repo)
+            span.set_attribute("event.type", event.event_type)
+            db = self._require_db()
+            try:
+                await db.execute(
+                    """INSERT INTO events
+                       (received_at, delivery_id, repo, event_type, action, sender, payload)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        event.received_at.isoformat(),
+                        event.delivery_id,
+                        event.repo,
+                        event.event_type,
+                        event.action,
+                        event.sender,
+                        json.dumps(event.payload),
+                    ),
+                )
+                await db.commit()
+                span.set_attribute("event.stored", True)
+                return True
+            except aiosqlite.IntegrityError:
+                logger.debug("Duplicate event ignored: %s", event.delivery_id)
+                span.set_attribute("event.stored", False)
+                span.set_attribute("event.duplicate", True)
+                return False
 
     async def get_events(
         self,
@@ -110,46 +133,53 @@ class EventStore:
         Returns:
             Matching events ordered by ``received_at`` descending.
         """
-        clauses: list[str] = []
-        params: list[str] = []
+        tracer = _get_tracer()
+        with tracer.start_as_current_span("eventstore.get_events") as span:
+            span.set_attribute("db.system", "sqlite")
+            span.set_attribute("db.operation", "SELECT")
 
-        if repo:
-            escaped = repo.replace("%", "\\%").replace("_", "\\_")
-            clauses.append("repo LIKE ? ESCAPE '\\'")
-            params.append(f"%{escaped}%")
-        if event_type:
-            clauses.append("event_type = ?")
-            params.append(event_type)
-        if action:
-            clauses.append("action = ?")
-            params.append(action)
-        if since:
-            clauses.append("received_at >= ?")
-            params.append(since.isoformat())
-        if sender:
-            clauses.append("sender = ?")
-            params.append(sender)
+            clauses: list[str] = []
+            params: list[str] = []
 
-        where = " AND ".join(clauses) if clauses else "1=1"
-        query = f"SELECT * FROM events WHERE {where} ORDER BY received_at DESC"
+            if repo:
+                escaped = repo.replace("%", "\\%").replace("_", "\\_")
+                clauses.append("repo LIKE ? ESCAPE '\\'")
+                params.append(f"%{escaped}%")
+            if event_type:
+                clauses.append("event_type = ?")
+                params.append(event_type)
+            if action:
+                clauses.append("action = ?")
+                params.append(action)
+            if since:
+                clauses.append("received_at >= ?")
+                params.append(since.isoformat())
+            if sender:
+                clauses.append("sender = ?")
+                params.append(sender)
 
-        db = self._require_db()
-        cursor = await db.execute(query, params)
-        rows = await cursor.fetchall()
+            where = " AND ".join(clauses) if clauses else "1=1"
+            query = f"SELECT * FROM events WHERE {where} ORDER BY received_at DESC"
 
-        return [
-            WebhookEvent(
-                id=row["id"],
-                received_at=datetime.fromisoformat(row["received_at"]),
-                delivery_id=row["delivery_id"],
-                repo=row["repo"],
-                event_type=row["event_type"],
-                action=row["action"],
-                sender=row["sender"],
-                payload=json.loads(row["payload"]),
-            )
-            for row in rows
-        ]
+            db = self._require_db()
+            cursor = await db.execute(query, params)
+            rows = await cursor.fetchall()
+
+            results = [
+                WebhookEvent(
+                    id=row["id"],
+                    received_at=datetime.fromisoformat(row["received_at"]),
+                    delivery_id=row["delivery_id"],
+                    repo=row["repo"],
+                    event_type=row["event_type"],
+                    action=row["action"],
+                    sender=row["sender"],
+                    payload=json.loads(row["payload"]),
+                )
+                for row in rows
+            ]
+            span.set_attribute("db.result_count", len(results))
+            return results
 
     async def prune(self, days: int = 7) -> int:
         """Delete events older than *days* days.

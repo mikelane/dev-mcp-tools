@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastmcp import FastMCP
 
 from .storage import EventStore
+from .telemetry import init_webhook_telemetry, query_results_counter, trace_tool_async
+
+init_webhook_telemetry()
 
 mcp = FastMCP("github-webhooks")
 
@@ -22,7 +25,7 @@ def init_server(store: EventStore, username: str = "mikelane") -> None:
         store: The initialized :class:`EventStore` to query.
         username: The GitHub username used to filter review requests.
     """
-    global _store, _username  # noqa: PLW0603
+    global _store, _username
     _store = store
     _username = username
 
@@ -36,10 +39,11 @@ def _require_store() -> EventStore:
 
 def _default_since() -> datetime:
     """Return a timestamp 24 hours ago in UTC."""
-    return datetime.now(timezone.utc) - timedelta(hours=24)
+    return datetime.now(UTC) - timedelta(hours=24)
 
 
 @mcp.tool()
+@trace_tool_async("get_pending_reviews")
 async def get_pending_reviews(repo: str | None = None) -> str:
     """Get pull requests awaiting my review.
 
@@ -58,19 +62,23 @@ async def get_pending_reviews(repo: str | None = None) -> str:
         if reviewer.get("login") != _username:
             continue
         pr = webhook_event.payload.get("pull_request", {})
-        pending_reviews.append({
-            "repo": webhook_event.repo,
-            "number": pr.get("number"),
-            "title": pr.get("title"),
-            "url": pr.get("html_url"),
-            "author": pr.get("user", {}).get("login"),
-            "requested_at": webhook_event.received_at.isoformat(),
-        })
+        pending_reviews.append(
+            {
+                "repo": webhook_event.repo,
+                "number": pr.get("number"),
+                "title": pr.get("title"),
+                "url": pr.get("html_url"),
+                "author": pr.get("user", {}).get("login"),
+                "requested_at": webhook_event.received_at.isoformat(),
+            }
+        )
 
+    query_results_counter.add(len(pending_reviews), {"tool.name": "get_pending_reviews"})
     return json.dumps(pending_reviews, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_review_feedback")
 async def get_review_feedback(pr_number: int, repo: str) -> str:
     """Get review comments on a specific pull request.
 
@@ -94,19 +102,23 @@ async def get_review_feedback(pr_number: int, repo: str) -> str:
             continue
         review = webhook_event.payload.get("review", {})
         comment = webhook_event.payload.get("comment", {})
-        feedback_entries.append({
-            "repo": webhook_event.repo,
-            "pr_number": pr_number,
-            "author": (review or comment).get("user", {}).get("login"),
-            "state": review.get("state"),
-            "body": (review or comment).get("body", ""),
-            "submitted_at": webhook_event.received_at.isoformat(),
-        })
+        feedback_entries.append(
+            {
+                "repo": webhook_event.repo,
+                "pr_number": pr_number,
+                "author": (review or comment).get("user", {}).get("login"),
+                "state": review.get("state"),
+                "body": (review or comment).get("body", ""),
+                "submitted_at": webhook_event.received_at.isoformat(),
+            }
+        )
 
+    query_results_counter.add(len(feedback_entries), {"tool.name": "get_review_feedback"})
     return json.dumps(feedback_entries, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_ci_status")
 async def get_ci_status(pr_number: int | None = None, repo: str | None = None) -> str:
     """Get CI/CD status, filtered to failures by default.
 
@@ -119,7 +131,11 @@ async def get_ci_status(pr_number: int | None = None, repo: str | None = None) -
     for event_type in ("check_run", "check_suite", "workflow_run"):
         events = await _require_store().get_events(repo=repo, event_type=event_type)
         for webhook_event in events:
-            ci_run_payload = webhook_event.payload.get("check_run") or webhook_event.payload.get("check_suite") or webhook_event.payload.get("workflow_run", {})
+            ci_run_payload = (
+                webhook_event.payload.get("check_run")
+                or webhook_event.payload.get("check_suite")
+                or webhook_event.payload.get("workflow_run", {})
+            )
             conclusion = ci_run_payload.get("conclusion")
             if conclusion not in ("failure", "timed_out", "cancelled"):
                 continue
@@ -129,19 +145,25 @@ async def get_ci_status(pr_number: int | None = None, repo: str | None = None) -
                 if not any(pr.get("number") == pr_number for pr in associated_prs):
                     continue
 
-            ci_failures.append({
-                "repo": webhook_event.repo,
-                "name": ci_run_payload.get("name"),
-                "conclusion": conclusion,
-                "url": ci_run_payload.get("html_url"),
-                "pr_numbers": [pr.get("number") for pr in ci_run_payload.get("pull_requests", [])],
-                "completed_at": webhook_event.received_at.isoformat(),
-            })
+            ci_failures.append(
+                {
+                    "repo": webhook_event.repo,
+                    "name": ci_run_payload.get("name"),
+                    "conclusion": conclusion,
+                    "url": ci_run_payload.get("html_url"),
+                    "pr_numbers": [
+                        pr.get("number") for pr in ci_run_payload.get("pull_requests", [])
+                    ],
+                    "completed_at": webhook_event.received_at.isoformat(),
+                }
+            )
 
+    query_results_counter.add(len(ci_failures), {"tool.name": "get_ci_status"})
     return json.dumps(ci_failures, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_new_prs")
 async def get_new_prs(repo: str | None = None, since: str | None = None) -> str:
     """Get recently opened pull requests.
 
@@ -161,19 +183,23 @@ async def get_new_prs(repo: str | None = None, since: str | None = None) -> str:
     opened_prs = []
     for webhook_event in events:
         pr = webhook_event.payload.get("pull_request", {})
-        opened_prs.append({
-            "repo": webhook_event.repo,
-            "number": pr.get("number"),
-            "title": pr.get("title"),
-            "url": pr.get("html_url"),
-            "author": pr.get("user", {}).get("login"),
-            "opened_at": webhook_event.received_at.isoformat(),
-        })
+        opened_prs.append(
+            {
+                "repo": webhook_event.repo,
+                "number": pr.get("number"),
+                "title": pr.get("title"),
+                "url": pr.get("html_url"),
+                "author": pr.get("user", {}).get("login"),
+                "opened_at": webhook_event.received_at.isoformat(),
+            }
+        )
 
+    query_results_counter.add(len(opened_prs), {"tool.name": "get_new_prs"})
     return json.dumps(opened_prs, indent=2)
 
 
 @mcp.tool()
+@trace_tool_async("get_notifications")
 async def get_notifications(since: str | None = None) -> str:
     """Get all webhook events since a given time, grouped by repo.
 
@@ -183,15 +209,28 @@ async def get_notifications(since: str | None = None) -> str:
     since_dt = datetime.fromisoformat(since) if since else _default_since()
     events = await _require_store().get_events(since=since_dt)
 
-    notification_summaries = []
-    for webhook_event in events:
-        notification_summaries.append({
+    notification_summaries = [
+        {
             "repo": webhook_event.repo,
             "event_type": webhook_event.event_type,
             "action": webhook_event.action,
             "sender": webhook_event.sender,
             "received_at": webhook_event.received_at.isoformat(),
-            "summary": " ".join(filter(None, [webhook_event.sender, webhook_event.action, webhook_event.event_type, "on", webhook_event.repo])),
-        })
+            "summary": " ".join(
+                filter(
+                    None,
+                    [
+                        webhook_event.sender,
+                        webhook_event.action,
+                        webhook_event.event_type,
+                        "on",
+                        webhook_event.repo,
+                    ],
+                )
+            ),
+        }
+        for webhook_event in events
+    ]
 
+    query_results_counter.add(len(notification_summaries), {"tool.name": "get_notifications"})
     return json.dumps(notification_summaries, indent=2)

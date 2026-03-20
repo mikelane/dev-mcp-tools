@@ -8,7 +8,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 from oracle.storage.store import OracleStore
 
 
@@ -48,7 +47,15 @@ class DescribeOracleStoreInit:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = sorted(row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_"))
             conn.close()
-            assert tables == ["agent_log", "command_results", "file_cache", "git_state"]
+            assert tables == [
+                "agent_log",
+                "command_results",
+                "file_cache",
+                "file_coaccess",
+                "git_state",
+                "session_profiles",
+                "tool_sequences",
+            ]
         finally:
             store2.close()
 
@@ -60,7 +67,32 @@ class DescribeOracleStoreInit:
             cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
             tables = sorted(row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_"))
             conn.close()
-            assert tables == ["agent_log", "command_results", "file_cache", "git_state"]
+            assert tables == [
+                "agent_log",
+                "command_results",
+                "file_cache",
+                "file_coaccess",
+                "git_state",
+                "session_profiles",
+                "tool_sequences",
+            ]
+        finally:
+            store.close()
+
+
+@pytest.mark.medium
+class DescribeAnalyticsTables:
+    def it_creates_analytics_tables_on_init(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "analytics_check.db"
+        store = OracleStore(db_path)
+        try:
+            conn = sqlite3.connect(db_path)
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
+            tables = sorted(row[0] for row in cursor.fetchall() if not row[0].startswith("sqlite_"))
+            conn.close()
+            assert "tool_sequences" in tables
+            assert "file_coaccess" in tables
+            assert "session_profiles" in tables
         finally:
             store.close()
 
@@ -205,3 +237,144 @@ class DescribeEviction:
         store.upsert_file_cache("c.py", b"c", "h3", None, now)  # recent, keep
         count = store.evict_stale_files(max_age_days=30, now=now)
         assert count == 2
+
+
+@pytest.mark.medium
+class DescribeToolSequences:
+    def it_records_a_tool_call_in_sequence(self, store: OracleStore) -> None:
+        store.record_tool_sequence("sess-1", 0, "oracle_read", "main.py", 1000.0)
+        rows = store.get_tool_sequences("sess-1")
+        assert len(rows) == 1
+        assert rows[0]["session_id"] == "sess-1"
+        assert rows[0]["sequence_index"] == 0
+        assert rows[0]["tool_name"] == "oracle_read"
+        assert rows[0]["input_summary"] == "main.py"
+        assert rows[0]["ts"] == 1000.0
+
+    def it_records_multiple_calls_in_order(self, store: OracleStore) -> None:
+        store.record_tool_sequence("sess-1", 0, "oracle_read", "a.py", 1000.0)
+        store.record_tool_sequence("sess-1", 1, "oracle_grep", "pattern", 1001.0)
+        store.record_tool_sequence("sess-1", 2, "oracle_run", "git status", 1002.0)
+        rows = store.get_tool_sequences("sess-1")
+        assert len(rows) == 3
+        assert rows[0]["tool_name"] == "oracle_read"
+        assert rows[1]["tool_name"] == "oracle_grep"
+        assert rows[2]["tool_name"] == "oracle_run"
+
+
+@pytest.mark.medium
+class DescribeFileCoaccess:
+    def it_inserts_a_new_pair(self, store: OracleStore) -> None:
+        store.upsert_file_coaccess("a.py", "b.py", 1000.0)
+        pairs = store.get_top_coaccess_pairs(limit=10)
+        assert len(pairs) == 1
+        assert pairs[0]["file_a"] == "a.py"
+        assert pairs[0]["file_b"] == "b.py"
+        assert pairs[0]["session_count"] == 1
+        assert pairs[0]["last_seen"] == 1000.0
+
+    def it_increments_count_on_repeat(self, store: OracleStore) -> None:
+        store.upsert_file_coaccess("a.py", "b.py", 1000.0)
+        store.upsert_file_coaccess("a.py", "b.py", 2000.0)
+        pairs = store.get_top_coaccess_pairs(limit=10)
+        assert len(pairs) == 1
+        assert pairs[0]["session_count"] == 2
+
+    def it_enforces_alphabetical_key_order(self, store: OracleStore) -> None:
+        store.upsert_file_coaccess("z.py", "a.py", 1000.0)
+        pairs = store.get_top_coaccess_pairs(limit=10)
+        assert len(pairs) == 1
+        assert pairs[0]["file_a"] == "a.py"
+        assert pairs[0]["file_b"] == "z.py"
+
+    def it_returns_pairs_for_a_specific_file(self, store: OracleStore) -> None:
+        store.upsert_file_coaccess("a.py", "b.py", 1000.0)
+        store.upsert_file_coaccess("a.py", "c.py", 1001.0)
+        store.upsert_file_coaccess("d.py", "e.py", 1002.0)
+        pairs = store.get_coaccess_for_file("a.py")
+        assert len(pairs) == 2
+
+
+@pytest.mark.medium
+class DescribeSessionProfiles:
+    def it_upserts_a_session_profile(self, store: OracleStore) -> None:
+        store.upsert_session_profile("sess-1", 1000.0, 2000.0, '{"oracle_read": 5}', 10, 0.75)
+        profile = store.get_session_profile("sess-1")
+        assert profile is not None
+        assert profile["session_id"] == "sess-1"
+        assert profile["started_at"] == 1000.0
+        assert profile["ended_at"] == 2000.0
+        assert profile["tool_counts"] == '{"oracle_read": 5}'
+        assert profile["files_touched"] == 10
+        assert profile["cache_hit_rate"] == pytest.approx(0.75)
+
+    def it_updates_existing_profile(self, store: OracleStore) -> None:
+        store.upsert_session_profile("sess-1", 1000.0, 2000.0, '{"oracle_read": 5}', 10, 0.75)
+        store.upsert_session_profile("sess-1", 1000.0, 3000.0, '{"oracle_read": 8}', 15, 0.80)
+        profile = store.get_session_profile("sess-1")
+        assert profile is not None
+        assert profile["ended_at"] == 3000.0
+        assert profile["files_touched"] == 15
+
+    def it_returns_none_for_missing_session(self, store: OracleStore) -> None:
+        assert store.get_session_profile("nonexistent") is None
+
+    def it_returns_recent_profiles(self, store: OracleStore) -> None:
+        store.upsert_session_profile("sess-old", 1000.0, 2000.0, "{}", 5, 0.5)
+        store.upsert_session_profile("sess-new", 3000.0, 4000.0, "{}", 8, 0.9)
+        profiles = store.get_recent_session_profiles(limit=20)
+        assert len(profiles) == 2
+        assert profiles[0]["session_id"] == "sess-new"
+        assert profiles[1]["session_id"] == "sess-old"
+
+
+@pytest.mark.medium
+class DescribeSessionLog:
+    def it_returns_all_log_rows_for_a_session(self, store: OracleStore) -> None:
+        store.log_interaction("sess-1", "oracle_read", "a.py", True, 100, 1000)
+        store.log_interaction("sess-1", "oracle_grep", "pattern", False, 0, 2000)
+        store.log_interaction("sess-2", "oracle_read", "b.py", True, 50, 3000)
+        rows = store.get_session_log("sess-1")
+        assert len(rows) == 2
+        assert rows[0]["tool_name"] == "oracle_read"
+        assert rows[1]["tool_name"] == "oracle_grep"
+
+    def it_returns_empty_list_for_unknown_session(self, store: OracleStore) -> None:
+        assert store.get_session_log("nonexistent") == []
+
+    def it_returns_distinct_session_ids(self, store: OracleStore) -> None:
+        store.record_tool_sequence("sess-1", 0, "oracle_read", "a.py", 1000.0)
+        store.record_tool_sequence("sess-1", 1, "oracle_grep", "pat", 1001.0)
+        store.record_tool_sequence("sess-2", 0, "oracle_run", "cmd", 2000.0)
+        ids = store.get_distinct_session_ids()
+        assert sorted(ids) == ["sess-1", "sess-2"]
+
+
+@pytest.mark.medium
+class DescribeRereadQuery:
+    def it_returns_files_read_above_threshold(self, store: OracleStore) -> None:
+        store.log_interaction("sess-1", "oracle_read", "config.py", True, 100, 1000)
+        store.log_interaction("sess-1", "oracle_read", "config.py", True, 100, 2000)
+        store.log_interaction("sess-1", "oracle_read", "config.py", True, 100, 3000)
+        store.log_interaction("sess-1", "oracle_read", "other.py", False, 0, 4000)
+        results = store.get_frequently_reread_files(min_reads=3)
+        assert len(results) == 1
+        assert results[0]["path"] == "config.py"
+        assert results[0]["read_count"] == 3
+
+    def it_returns_empty_when_no_files_above_threshold(self, store: OracleStore) -> None:
+        store.log_interaction("sess-1", "oracle_read", "once.py", False, 0, 1000)
+        results = store.get_frequently_reread_files(min_reads=3)
+        assert results == []
+
+
+@pytest.mark.medium
+class DescribeCacheHitRateQuery:
+    def it_computes_average_from_session_profiles(self, store: OracleStore) -> None:
+        store.upsert_session_profile("sess-1", 1000.0, 2000.0, "{}", 5, 0.6)
+        store.upsert_session_profile("sess-2", 3000.0, 4000.0, "{}", 8, 0.8)
+        avg = store.get_average_cache_hit_rate()
+        assert avg == pytest.approx(0.7)
+
+    def it_returns_zero_when_no_profiles(self, store: OracleStore) -> None:
+        assert store.get_average_cache_hit_rate() == 0.0

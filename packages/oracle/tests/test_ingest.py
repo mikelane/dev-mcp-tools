@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from pytest_mock import MockerFixture
-
 from oracle.ingest import drain_ingest_queue
+from pytest_mock import MockerFixture
 
 
 class DescribeIngestQueue:

@@ -19,6 +19,7 @@ def git_cmd(args: list[str], cwd: Path) -> str:
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
     except (subprocess.TimeoutExpired, OSError):
         logger.warning("git command failed: %s", args, exc_info=True)

@@ -3,7 +3,6 @@
 import asyncio
 
 from behave import given, then, when
-
 from oracle.cache.command_cache import CommandCache
 from oracle.cache.git_cache import GitCache
 from oracle.project import ProjectState, StackInfo

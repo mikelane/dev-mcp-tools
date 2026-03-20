@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from oracle.cache.git_cache import GitCache, GitSnapshot
 from oracle.integrations.git import (
     get_branch,

@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from oracle.ingest_bridge import process_ingest
 from oracle.project import ProjectState
 
@@ -30,7 +29,7 @@ class DescribeProcessIngest:
         (project / "hello.py").write_text("print('hello world')\n")
         return project
 
-    def _enqueue(self, oracle_dir: Path, entry: dict) -> None:  # noqa: ANN001
+    def _enqueue(self, oracle_dir: Path, entry: dict) -> None:
         """Write an entry into the ingest queue directory."""
         queue_dir = oracle_dir / "ingest"
         queue_dir.mkdir(exist_ok=True)

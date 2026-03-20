@@ -6,9 +6,8 @@ import json
 from pathlib import Path
 
 import pytest
-from pytest_mock import MockerFixture
-
 from oracle.storage.store import OracleStore
+from pytest_mock import MockerFixture
 
 
 @pytest.mark.medium

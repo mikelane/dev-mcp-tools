@@ -38,7 +38,7 @@ class ChunkhoundClient:
         except (TimeoutError, FileNotFoundError, OSError):
             return False
 
-    async def search(self, query: str, max_results: int = 5) -> list[dict[str, str]]:
+    async def search(self, query: str, max_results: int = 5) -> list[dict[str, str]]:  # noqa: ARG002
         """Semantic search. Returns empty list if not started."""
         if not self._started or self.process is None:
             return []

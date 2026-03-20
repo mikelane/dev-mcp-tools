@@ -1,14 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
-
 from github_webhook_mcp.models import WebhookEvent
 from github_webhook_mcp.storage import EventStore
+
+
+@pytest.fixture(autouse=True)
+def _disable_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Disable OpenTelemetry for all webhook tests."""
+    monkeypatch.setenv("ORACLE_TELEMETRY_ENABLED", "false")
 
 
 @pytest_asyncio.fixture
@@ -23,7 +28,7 @@ async def store(tmp_path: Path) -> AsyncIterator[EventStore]:
 @pytest.fixture
 def sample_event() -> WebhookEvent:
     return WebhookEvent(
-        received_at=datetime.now(timezone.utc),
+        received_at=datetime.now(UTC),
         delivery_id="delivery-001",
         repo="mikelane/test-repo",
         event_type="pull_request",

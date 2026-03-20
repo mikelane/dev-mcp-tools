@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
-
 from github_webhook_mcp.models import WebhookEvent
 from github_webhook_mcp.storage import EventStore
 
@@ -27,7 +26,9 @@ async def test_store_event_and_retrieve(store: EventStore, sample_event: Webhook
 
 
 @pytest.mark.asyncio
-async def test_duplicate_delivery_id_is_ignored(store: EventStore, sample_event: WebhookEvent) -> None:
+async def test_duplicate_delivery_id_is_ignored(
+    store: EventStore, sample_event: WebhookEvent
+) -> None:
     await store.store_event(sample_event)
     stored_again = await store.store_event(sample_event)
 
@@ -64,7 +65,9 @@ async def test_query_by_event_type(store: EventStore, sample_event: WebhookEvent
 
 
 @pytest.mark.asyncio
-async def test_repo_filter_escapes_sql_wildcards(store: EventStore, sample_event: WebhookEvent) -> None:
+async def test_repo_filter_escapes_sql_wildcards(
+    store: EventStore, sample_event: WebhookEvent
+) -> None:
     await store.store_event(sample_event)
 
     percent_matches = await store.get_events(repo="%")
@@ -82,13 +85,13 @@ async def test_query_by_since(store: EventStore, sample_event: WebhookEvent) -> 
     old_event = sample_event.model_copy(
         update={
             "delivery_id": "delivery-old",
-            "received_at": datetime(2020, 1, 1, tzinfo=timezone.utc),
+            "received_at": datetime(2020, 1, 1, tzinfo=UTC),
         }
     )
     await store.store_event(old_event)
     await store.store_event(sample_event)
 
-    recent_events = await store.get_events(since=datetime(2024, 1, 1, tzinfo=timezone.utc))
+    recent_events = await store.get_events(since=datetime(2024, 1, 1, tzinfo=UTC))
     assert len(recent_events) == 1
     assert recent_events[0].delivery_id == "delivery-001"
 
@@ -98,7 +101,7 @@ async def test_prune_removes_old_events(store: EventStore, sample_event: Webhook
     old_event = sample_event.model_copy(
         update={
             "delivery_id": "delivery-ancient",
-            "received_at": datetime(2020, 1, 1, tzinfo=timezone.utc),
+            "received_at": datetime(2020, 1, 1, tzinfo=UTC),
         }
     )
     await store.store_event(old_event)
@@ -191,10 +194,16 @@ async def test_query_by_sender_filter(store: EventStore, sample_event: WebhookEv
 @pytest.mark.asyncio
 async def test_query_with_multiple_filters(store: EventStore, sample_event: WebhookEvent) -> None:
     """Multiple filters are AND-combined."""
-    await store.store_event(sample_event)  # repo=mikelane/test-repo, event_type=pull_request, action=opened
+    await store.store_event(
+        sample_event
+    )  # repo=mikelane/test-repo, event_type=pull_request, action=opened
 
     issue_event = sample_event.model_copy(
-        update={"delivery_id": "delivery-issue", "event_type": "issues", "action": "opened"}
+        update={
+            "delivery_id": "delivery-issue",
+            "event_type": "issues",
+            "action": "opened",
+        }
     )
     await store.store_event(issue_event)
 
@@ -225,18 +234,20 @@ async def test_query_no_filters_returns_all(store: EventStore, sample_event: Web
 
 
 @pytest.mark.asyncio
-async def test_query_results_ordered_by_received_at_descending(store: EventStore, sample_event: WebhookEvent) -> None:
+async def test_query_results_ordered_by_received_at_descending(
+    store: EventStore, sample_event: WebhookEvent
+) -> None:
     """Events are returned newest first."""
     old = sample_event.model_copy(
         update={
             "delivery_id": "delivery-old",
-            "received_at": datetime(2023, 1, 1, tzinfo=timezone.utc),
+            "received_at": datetime(2023, 1, 1, tzinfo=UTC),
         }
     )
     new = sample_event.model_copy(
         update={
             "delivery_id": "delivery-new",
-            "received_at": datetime(2025, 6, 1, tzinfo=timezone.utc),
+            "received_at": datetime(2025, 6, 1, tzinfo=UTC),
         }
     )
     await store.store_event(old)

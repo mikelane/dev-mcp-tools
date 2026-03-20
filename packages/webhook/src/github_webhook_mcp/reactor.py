@@ -5,7 +5,21 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from opentelemetry import trace
+
 logger = logging.getLogger(__name__)
+
+_tracer: trace.Tracer | None = None
+
+
+def _get_tracer() -> trace.Tracer:
+    global _tracer
+    if _tracer is None:
+        from .telemetry import get_tracer
+
+        _tracer = get_tracer("webhook.reactor")
+    return _tracer
+
 
 AUTO_REVIEW_REPO = "SayMoreAI/saymore"
 DEFAULT_DEBOUNCE_SECONDS = 900  # 15 minutes
@@ -38,25 +52,36 @@ class PRReactor:
             pr_number: The pull-request number.
             action: The webhook action (e.g. ``"opened"``, ``"synchronize"``).
         """
-        if repo != self.auto_review_repo:
-            return
+        tracer = _get_tracer()
+        with tracer.start_as_current_span("reactor.on_pr_event") as span:
+            span.set_attribute("reactor.repo", repo)
+            span.set_attribute("reactor.pr_number", pr_number)
+            span.set_attribute("reactor.action", action)
 
-        timer_key = f"{repo}:{pr_number}"
+            if repo != self.auto_review_repo:
+                span.set_attribute("reactor.skipped", True)
+                return
 
-        if action == "opened":
-            self._cancel_timer(timer_key)
-            await self._spawn_review(repo, pr_number)
-        elif action == "synchronize":
-            self._cancel_timer(timer_key)
-            loop = asyncio.get_running_loop()
-            self._timers[timer_key] = loop.call_later(
-                self.debounce_seconds,
-                lambda: asyncio.ensure_future(self._spawn_review(repo, pr_number)),
-            )
-            logger.info(
-                "PR %s#%d pushed — review scheduled in %ds",
-                repo, pr_number, self.debounce_seconds,
-            )
+            timer_key = f"{repo}:{pr_number}"
+
+            if action == "opened":
+                span.set_attribute("reactor.trigger", "immediate")
+                self._cancel_timer(timer_key)
+                await self._spawn_review(repo, pr_number)
+            elif action == "synchronize":
+                span.set_attribute("reactor.trigger", "debounced")
+                self._cancel_timer(timer_key)
+                loop = asyncio.get_running_loop()
+                self._timers[timer_key] = loop.call_later(
+                    self.debounce_seconds,
+                    lambda: asyncio.ensure_future(self._spawn_review(repo, pr_number)),
+                )
+                logger.info(
+                    "PR %s#%d pushed — review scheduled in %ds",
+                    repo,
+                    pr_number,
+                    self.debounce_seconds,
+                )
 
     def _cancel_timer(self, timer_key: str) -> None:
         """Cancel a pending debounce timer, if one exists for *timer_key*."""
@@ -71,23 +96,38 @@ class PRReactor:
             repo: The full repository name (``owner/repo``).
             pr_number: The pull-request number to review.
         """
-        self._timers.pop(f"{repo}:{pr_number}", None)
-        logger.info("Spawning review for %s#%d", repo, pr_number)
-        try:
-            review_process = await asyncio.create_subprocess_exec(
-                "claude", "-p", f"/review-pr {pr_number}",
-                "--cwd", self.repo_path,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            stdout, stderr = await review_process.communicate()
-            if review_process.returncode == 0:
-                logger.info("Review complete for %s#%d", repo, pr_number)
-            else:
-                logger.warning(
-                    "Review failed for %s#%d (exit %d): %s",
-                    repo, pr_number, review_process.returncode,
-                    stderr.decode()[:500],
+        tracer = _get_tracer()
+        with tracer.start_as_current_span("reactor.spawn_review") as span:
+            span.set_attribute("reactor.repo", repo)
+            span.set_attribute("reactor.pr_number", pr_number)
+
+            self._timers.pop(f"{repo}:{pr_number}", None)
+            logger.info("Spawning review for %s#%d", repo, pr_number)
+            try:
+                review_process = await asyncio.create_subprocess_exec(
+                    "claude",
+                    "-p",
+                    f"/review-pr {pr_number}",
+                    "--cwd",
+                    self.repo_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
                 )
-        except FileNotFoundError:
-            logger.error("claude CLI not found — cannot spawn review")
+                _stdout, stderr = await review_process.communicate()
+                if review_process.returncode == 0:
+                    logger.info("Review complete for %s#%d", repo, pr_number)
+                    span.set_attribute("reactor.review_success", True)
+                else:
+                    logger.warning(
+                        "Review failed for %s#%d (exit %d): %s",
+                        repo,
+                        pr_number,
+                        review_process.returncode,
+                        stderr.decode()[:500],
+                    )
+                    span.set_attribute("reactor.review_success", False)
+                    span.set_attribute("reactor.exit_code", review_process.returncode)
+            except FileNotFoundError:
+                logger.error("claude CLI not found — cannot spawn review")
+                span.record_exception(FileNotFoundError("claude CLI not found"))
+                span.set_status(trace.StatusCode.ERROR, "claude CLI not found")

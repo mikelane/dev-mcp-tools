@@ -172,6 +172,7 @@ def _fallback_grep(question: str, root: Path) -> str:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=False,
             )
         except (subprocess.TimeoutExpired, OSError):
             continue

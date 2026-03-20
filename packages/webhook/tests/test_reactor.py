@@ -5,7 +5,6 @@ import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from github_webhook_mcp.reactor import PRReactor
 
 AUTO_REVIEW_REPO = "SayMoreAI/saymore"
@@ -96,8 +95,11 @@ async def test_spawn_review_success_logs_complete(
         await reactor._spawn_review(AUTO_REVIEW_REPO, 42)
 
         mock_exec.assert_called_once_with(
-            "claude", "-p", "/review-pr 42",
-            "--cwd", "/tmp/fake-saymore",
+            "claude",
+            "-p",
+            "/review-pr 42",
+            "--cwd",
+            "/tmp/fake-saymore",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

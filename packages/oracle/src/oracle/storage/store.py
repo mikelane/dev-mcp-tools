@@ -64,9 +64,39 @@ class OracleStore:
                 ts           INTEGER NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS tool_sequences (
+                id              INTEGER PRIMARY KEY,
+                session_id      TEXT NOT NULL,
+                sequence_index  INTEGER NOT NULL,
+                tool_name       TEXT NOT NULL,
+                input_summary   TEXT,
+                ts              REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS file_coaccess (
+                file_a          TEXT NOT NULL,
+                file_b          TEXT NOT NULL,
+                session_count   INTEGER NOT NULL DEFAULT 1,
+                last_seen       REAL NOT NULL,
+                PRIMARY KEY (file_a, file_b)
+            );
+
+            CREATE TABLE IF NOT EXISTS session_profiles (
+                session_id      TEXT PRIMARY KEY,
+                started_at      REAL NOT NULL,
+                ended_at        REAL NOT NULL,
+                tool_counts     TEXT NOT NULL,
+                files_touched   INTEGER NOT NULL DEFAULT 0,
+                cache_hit_rate  REAL NOT NULL DEFAULT 0.0
+            );
+
             CREATE INDEX IF NOT EXISTS idx_file_cache_last_read ON file_cache(last_read);
             CREATE INDEX IF NOT EXISTS idx_agent_log_session ON agent_log(session_id);
             CREATE INDEX IF NOT EXISTS idx_command_results_ran ON command_results(ran_at);
+            CREATE INDEX IF NOT EXISTS idx_tool_seq_session
+                ON tool_sequences(session_id);
+            CREATE INDEX IF NOT EXISTS idx_coaccess_count
+                ON file_coaccess(session_count DESC);
             """
         )
 
@@ -213,6 +243,136 @@ class OracleStore:
     def get_cumulative_call_count(self) -> int:
         row = self._conn.execute("SELECT COUNT(*) AS cnt FROM agent_log").fetchone()
         return row["cnt"] if row is not None else 0
+
+    def record_tool_sequence(
+        self,
+        session_id: str,
+        sequence_index: int,
+        tool_name: str,
+        input_summary: str | None,
+        timestamp: float,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO tool_sequences (session_id, sequence_index, tool_name, input_summary, ts)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (session_id, sequence_index, tool_name, input_summary, timestamp),
+        )
+        self._conn.commit()
+
+    def get_tool_sequences(self, session_id: str) -> list[dict[str, object]]:
+        rows = self._conn.execute(
+            "SELECT * FROM tool_sequences WHERE session_id = ? ORDER BY sequence_index",
+            (session_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_file_coaccess(self, file_a: str, file_b: str, timestamp: float) -> None:
+        a, b = (file_a, file_b) if file_a < file_b else (file_b, file_a)
+        self._conn.execute(
+            """
+            INSERT INTO file_coaccess (file_a, file_b, session_count, last_seen)
+            VALUES (?, ?, 1, ?)
+            ON CONFLICT(file_a, file_b) DO UPDATE SET
+                session_count = session_count + 1,
+                last_seen = excluded.last_seen
+            """,
+            (a, b, timestamp),
+        )
+        self._conn.commit()
+
+    def get_top_coaccess_pairs(self, limit: int = 20) -> list[dict[str, object]]:
+        rows = self._conn.execute(
+            "SELECT * FROM file_coaccess ORDER BY session_count DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_coaccess_for_file(self, file_path: str) -> list[dict[str, object]]:
+        rows = self._conn.execute(
+            "SELECT * FROM file_coaccess "
+            "WHERE file_a = ? OR file_b = ? "
+            "ORDER BY session_count DESC",
+            (file_path, file_path),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def upsert_session_profile(
+        self,
+        session_id: str,
+        started_at: float,
+        ended_at: float,
+        tool_counts: str,
+        files_touched: int,
+        cache_hit_rate: float,
+    ) -> None:
+        self._conn.execute(
+            """
+            INSERT INTO session_profiles
+                (session_id, started_at, ended_at, tool_counts, files_touched, cache_hit_rate)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(session_id) DO UPDATE SET
+                ended_at = excluded.ended_at,
+                tool_counts = excluded.tool_counts,
+                files_touched = excluded.files_touched,
+                cache_hit_rate = excluded.cache_hit_rate
+            """,
+            (session_id, started_at, ended_at, tool_counts, files_touched, cache_hit_rate),
+        )
+        self._conn.commit()
+
+    def get_session_profile(self, session_id: str) -> dict[str, object] | None:
+        row = self._conn.execute(
+            "SELECT * FROM session_profiles WHERE session_id = ?", (session_id,)
+        ).fetchone()
+        if row is None:
+            return None
+        return dict(row)
+
+    def get_recent_session_profiles(self, limit: int = 20) -> list[dict[str, object]]:
+        rows = self._conn.execute(
+            "SELECT * FROM session_profiles ORDER BY ended_at DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_session_log(self, session_id: str) -> list[dict[str, object]]:
+        rows = self._conn.execute(
+            "SELECT tool_name, input, cache_hit, ts FROM agent_log "
+            "WHERE session_id = ? ORDER BY ts",
+            (session_id,),
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_distinct_session_ids(self) -> list[str]:
+        rows = self._conn.execute("SELECT DISTINCT session_id FROM tool_sequences").fetchall()
+        return [row[0] for row in rows]
+
+    def get_frequently_reread_files(
+        self, min_reads: int = 3, session_id: str | None = None
+    ) -> list[dict[str, object]]:
+        where = "WHERE tool_name = 'oracle_read' AND input IS NOT NULL"
+        params: list[object] = []
+        if session_id:
+            where += " AND session_id = ?"
+            params.append(session_id)
+        rows = self._conn.execute(
+            f"SELECT input AS path, COUNT(*) AS read_count "
+            f"FROM agent_log {where} "
+            f"GROUP BY input HAVING read_count >= ? "
+            f"ORDER BY read_count DESC",
+            [*params, min_reads],
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+    def get_average_cache_hit_rate(self) -> float:
+        row = self._conn.execute(
+            "SELECT AVG(cache_hit_rate) AS avg_rate FROM session_profiles"
+        ).fetchone()
+        if row is None or row["avg_rate"] is None:
+            return 0.0
+        return float(row["avg_rate"])
 
     def evict_stale_files(self, max_age_days: int = 30, now: int | None = None) -> int:
         if now is None:

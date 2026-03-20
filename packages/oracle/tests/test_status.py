@@ -6,7 +6,6 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 from oracle.cache.git_cache import GitCache
 from oracle.project import StackInfo
 from oracle.storage.store import OracleStore
