@@ -126,7 +126,8 @@ class PRReactor:
                         stderr.decode()[:500],
                     )
                     span.set_attribute("reactor.review_success", False)
-                    span.set_attribute("reactor.exit_code", review_process.returncode)
+                    if review_process.returncode is not None:
+                        span.set_attribute("reactor.exit_code", review_process.returncode)
             except FileNotFoundError:
                 logger.error("claude CLI not found — cannot spawn review")
                 span.record_exception(FileNotFoundError("claude CLI not found"))

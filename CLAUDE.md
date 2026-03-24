@@ -29,7 +29,7 @@ uv run --package project-oracle coverage run --branch -m pytest
 uv run --package project-oracle coverage report --fail-under=95
 
 # Type check
-uv run mypy packages/oracle/src packages/shared/src
+uv run mypy packages/oracle/src packages/shared/src packages/webhook/src
 
 # Lint + format
 uv run ruff check .
@@ -42,7 +42,7 @@ cd packages/oracle && uv run behave
 ## Lefthook
 
 Pre-commit (parallel): `ruff check --fix` + `ruff format` on staged files.
-Pre-push (sequential): `ruff check .`, `ruff format --check .`, `mypy packages/oracle/src packages/shared/src`, `pytest` all three packages. Mypy does not yet cover webhook (known gap).
+Pre-push (sequential): `ruff check .`, `ruff format --check .`, `mypy packages/oracle/src packages/shared/src packages/webhook/src`, `pytest` all three packages.
 
 ## MCP Registration
 

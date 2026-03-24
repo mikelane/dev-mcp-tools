@@ -19,10 +19,8 @@ pre-push:
     ruff-format-check:
       glob: "*.py"
       run: uv run ruff format --check .
-    mypy-oracle:
-      run: uv run mypy packages/oracle/src
-    mypy-shared:
-      run: uv run mypy packages/shared/src
+    mypy:
+      run: uv run mypy packages/oracle/src packages/shared/src packages/webhook/src
     test-shared:
       run: uv run --package mcp-shared pytest packages/shared/tests/ -q
     test-oracle:

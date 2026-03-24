@@ -7,7 +7,9 @@ import inspect
 from collections.abc import Callable
 from typing import Any, TypeVar
 
-from mcp_shared.telemetry import get_meter, get_tracer, init_telemetry
+from mcp_shared.telemetry import get_meter as get_meter  # noqa: PLC0414
+from mcp_shared.telemetry import get_tracer as get_tracer  # noqa: PLC0414
+from mcp_shared.telemetry import init_telemetry
 from opentelemetry import trace
 
 F = TypeVar("F", bound=Callable[..., Any])

@@ -46,8 +46,9 @@ class SmeeEvent(BaseModel):
             repository information.
         """
         repo = self.body.get("repository")
-        if repo:
-            return repo.get("full_name")
+        if isinstance(repo, dict):
+            name: str | None = repo.get("full_name")
+            return name
         return None
 
     @property
@@ -67,6 +68,7 @@ class SmeeEvent(BaseModel):
             The sender's GitHub username, or ``None``.
         """
         sender = self.body.get("sender")
-        if sender:
-            return sender.get("login")
+        if isinstance(sender, dict):
+            login: str | None = sender.get("login")
+            return login
         return None
