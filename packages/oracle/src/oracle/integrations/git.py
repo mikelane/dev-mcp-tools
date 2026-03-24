@@ -2,19 +2,29 @@
 
 from __future__ import annotations
 
+import logging
+import subprocess
 from pathlib import Path
 
-from mcp_shared.git_helpers import git_cmd
+logger = logging.getLogger(__name__)
 
-# Re-export so existing `from oracle.integrations.git import git_cmd` still works.
-__all__ = [
-    "get_branch",
-    "get_dirty_files",
-    "get_head_sha",
-    "get_recent_log",
-    "get_staged_files",
-    "git_cmd",
-]
+
+def git_cmd(args: list[str], cwd: Path) -> str:
+    """Run git command, return stdout. Empty string on failure."""
+    try:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.TimeoutExpired, OSError):
+        logger.warning("git command failed: %s", args, exc_info=True)
+        return ""
+    if result.returncode != 0:
+        return ""
+    return result.stdout
 
 
 def get_branch(cwd: Path) -> str:

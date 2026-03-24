@@ -3,6 +3,7 @@
 import subprocess
 
 from behave import given, when
+
 from oracle.cache.git_cache import GitCache
 from oracle.storage.store import OracleStore
 

@@ -3,22 +3,13 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-from oracle.project import ProjectState, StackInfo
-from oracle.storage.store import OracleStore
 from pytest_mock import MockerFixture
 
-
-@pytest.fixture(autouse=True)
-def _reset_session_tracking() -> Generator[None, None, None]:
-    import oracle.server
-
-    oracle.server._previous_session_id = None
-    yield
-    oracle.server._previous_session_id = None
+from oracle.project import ProjectState, StackInfo
+from oracle.storage.store import OracleStore
 
 
 class DescribeServerInit:
@@ -28,7 +19,7 @@ class DescribeServerInit:
         from oracle.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 8
+        assert len(tools) == 7
 
     async def it_exposes_all_required_tool_names(self) -> None:
         from oracle.server import mcp
@@ -43,7 +34,6 @@ class DescribeServerInit:
             "oracle_ask",
             "oracle_forget",
             "oracle_stats",
-            "oracle_insights",
         }
         assert tool_names == expected
 
@@ -95,36 +85,7 @@ class DescribeEnsureCaches:
         _ensure_caches(project)
         assert project.command_cache is not None
 
-    def it_wires_tracker_when_missing(self, tmp_path: Path) -> None:
-        from oracle.server import _ensure_caches
-
-        store = OracleStore(tmp_path / "oracle.db")
-        project = ProjectState(
-            root=tmp_path,
-            stack=StackInfo(lang="python"),
-            store=store,
-            session_id="test-sess",
-        )
-        assert project.tracker is None
-        _ensure_caches(project)
-        assert project.tracker is not None
-
-    def it_wires_aggregator_when_missing(self, tmp_path: Path) -> None:
-        from oracle.server import _ensure_caches
-
-        store = OracleStore(tmp_path / "oracle.db")
-        project = ProjectState(
-            root=tmp_path,
-            stack=StackInfo(lang="python"),
-            store=store,
-        )
-        assert project.aggregator is None
-        _ensure_caches(project)
-        assert project.aggregator is not None
-
     def it_does_not_replace_existing_caches(self, tmp_path: Path) -> None:
-        from oracle.analytics.aggregator import SessionAggregator
-        from oracle.analytics.tracker import AnalyticsTracker
         from oracle.cache.command_cache import CommandCache
         from oracle.cache.file_cache import FileCache
         from oracle.cache.git_cache import GitCache
@@ -134,8 +95,6 @@ class DescribeEnsureCaches:
         fc = FileCache(store)
         gc = GitCache(store, tmp_path)
         cc = CommandCache(store, tmp_path)
-        tr = AnalyticsTracker(store, "sess")
-        ag = SessionAggregator(store)
         project = ProjectState(
             root=tmp_path,
             stack=StackInfo(lang="python"),
@@ -143,15 +102,11 @@ class DescribeEnsureCaches:
             file_cache=fc,
             git_cache=gc,
             command_cache=cc,
-            tracker=tr,
-            aggregator=ag,
         )
         _ensure_caches(project)
         assert project.file_cache is fc
         assert project.git_cache is gc
         assert project.command_cache is cc
-        assert project.tracker is tr
-        assert project.aggregator is ag
 
     def it_skips_wiring_when_store_is_none(self) -> None:
         from oracle.server import _ensure_caches
@@ -635,8 +590,10 @@ class DescribeOracleStatsTool:
         oracle_dir = tmp_path / ".oracle"
         oracle_dir.mkdir()
         (oracle_dir / "projects").mkdir()
+        (oracle_dir / "ingest").mkdir()
 
         mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
+        mocker.patch("oracle.server._oracle_dir", oracle_dir)
         result = oracle_stats()
         assert "no active project" in result.lower()
 
@@ -656,8 +613,8 @@ class DescribeOracleStatsTool:
         mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
         oracle_read(str(project_dir / "main.py"))
         result = oracle_stats()
-        assert "session" in result.lower()
-        assert "tool calls:" in result.lower()
+        assert "oracle health" in result.lower()
+        assert "hit rate:" in result.lower()
 
     def it_returns_error_when_store_is_none(self, tmp_path: Path, mocker: MockerFixture) -> None:
         from oracle.registry import ProjectRegistry
@@ -818,156 +775,6 @@ class DescribeOracleForgetFileCacheNone:
         mocker.patch.object(registry, "for_path", return_value=project)
         result = oracle_forget(str(project_dir / "foo.py"))
         assert "file cache not initialized" in result.lower()
-
-
-class DescribeOTelInstrumentation:
-    """Verify OTel decorators and metrics do not break tool behavior."""
-
-    def it_preserves_oracle_read_behavior(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import oracle_read
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-        (project_dir / ".git").mkdir()
-        (project_dir / "foo.py").write_text("x = 1\n")
-
-        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
-        result = oracle_read(str(project_dir / "foo.py"))
-        assert "x = 1" in result
-
-    def it_records_tool_calls_metric_on_read(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import _tool_calls_counter, oracle_read
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-        (project_dir / ".git").mkdir()
-        (project_dir / "foo.py").write_text("x = 1\n")
-
-        mock_add = mocker.patch.object(_tool_calls_counter, "add")
-        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
-        oracle_read(str(project_dir / "foo.py"))
-        mock_add.assert_called()
-
-    def it_records_cache_hits_metric_on_reread(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import _cache_hits_counter, oracle_read
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-        (project_dir / ".git").mkdir()
-        (project_dir / "foo.py").write_text("x = 1\n")
-
-        mock_add = mocker.patch.object(_cache_hits_counter, "add")
-        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
-        # First read: miss. Second read: cache hit.
-        oracle_read(str(project_dir / "foo.py"))
-        oracle_read(str(project_dir / "foo.py"))
-        mock_add.assert_called()
-
-    def it_records_tokens_saved_metric_on_reread(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import _tokens_saved_counter, oracle_read
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-        (project_dir / ".git").mkdir()
-        (project_dir / "foo.py").write_text("x = 1\n")
-
-        mock_add = mocker.patch.object(_tokens_saved_counter, "add")
-        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
-        # First read: miss. Second read: tokens saved > 0.
-        oracle_read(str(project_dir / "foo.py"))
-        oracle_read(str(project_dir / "foo.py"))
-        mock_add.assert_called()
-        # The amount argument is the first positional arg
-        amount = mock_add.call_args[0][0]
-        assert amount > 0
-
-    def it_does_not_record_cache_hit_on_first_read(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import _cache_hits_counter, oracle_read
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-        (project_dir / ".git").mkdir()
-        (project_dir / "foo.py").write_text("x = 1\n")
-
-        mock_add = mocker.patch.object(_cache_hits_counter, "add")
-        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
-        oracle_read(str(project_dir / "foo.py"))
-        mock_add.assert_not_called()
-
-
-class DescribeOracleInsightsTool:
-    """Test the oracle_insights tool function."""
-
-    def it_returns_error_when_no_current_project(
-        self, tmp_path: Path, mocker: MockerFixture
-    ) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import oracle_insights
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
-        result = oracle_insights()
-        assert "no active project" in result.lower()
-
-    def it_returns_insights_for_active_project(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import oracle_insights, oracle_read
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        project_dir = tmp_path / "proj"
-        project_dir.mkdir()
-        (project_dir / ".git").mkdir()
-        (project_dir / "main.py").write_text("x = 1\n")
-        mocker.patch("oracle.server._registry", ProjectRegistry(oracle_dir))
-        oracle_read(str(project_dir / "main.py"))
-        result = oracle_insights()
-        assert "no analytics data" in result.lower()
-
-    def it_returns_error_when_store_is_none(self, tmp_path: Path, mocker: MockerFixture) -> None:
-        from oracle.registry import ProjectRegistry
-        from oracle.server import oracle_insights
-
-        oracle_dir = tmp_path / ".oracle"
-        oracle_dir.mkdir()
-        (oracle_dir / "projects").mkdir()
-        registry = ProjectRegistry(oracle_dir)
-        mocker.patch("oracle.server._registry", registry)
-        project = ProjectState(
-            root=tmp_path,
-            stack=StackInfo(lang="python"),
-            store=None,
-        )
-        registry._current = project
-        result = oracle_insights()
-        assert "store not initialized" in result.lower()
 
 
 class DescribeMainEntryPoint:

@@ -8,28 +8,10 @@ import time
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP
-from mcp_shared.telemetry import get_meter, get_tracer, init_telemetry, trace_tool
 
 from oracle.project import ProjectState
 from oracle.registry import ProjectRegistry
-
-# Initialize telemetry for Oracle
-init_telemetry("project-oracle")
-
-_tracer = get_tracer("oracle.server")
-_meter = get_meter("oracle.server")
-_tool_calls_counter = _meter.create_counter(
-    "oracle.tool.calls",
-    description="Number of Oracle MCP tool invocations",
-)
-_cache_hits_counter = _meter.create_counter(
-    "oracle.cache.hits",
-    description="Number of cache hits across all tools",
-)
-_tokens_saved_counter = _meter.create_counter(
-    "oracle.tokens.saved",
-    description="Total estimated tokens saved by caching",
-)
+from oracle.telemetry import Telemetry, create_telemetry
 
 mcp = FastMCP(
     "project-oracle",
@@ -43,8 +25,16 @@ mcp = FastMCP(
 
 _oracle_dir = Path(os.environ.get("ORACLE_DIR", str(Path.home() / ".project-oracle")))
 _registry = ProjectRegistry(_oracle_dir)
+_telemetry: Telemetry | None = None
 
-_previous_session_id: str | None = None
+
+def _get_telemetry() -> Telemetry:
+    global _telemetry  # noqa: PLW0603
+    if _telemetry is None:
+        project = _registry.current()
+        store = project.store if project is not None else None
+        _telemetry = create_telemetry(store=store)
+    return _telemetry
 
 
 def _ensure_caches(project: ProjectState) -> None:
@@ -63,22 +53,13 @@ def _ensure_caches(project: ProjectState) -> None:
         from oracle.cache.command_cache import CommandCache
 
         project.command_cache = CommandCache(project.store, project.root)
-    if project.tracker is None:
-        from oracle.analytics.tracker import AnalyticsTracker
-
-        project.tracker = AnalyticsTracker(project.store, project.session_id)
-    if project.aggregator is None:
-        from oracle.analytics.aggregator import SessionAggregator
-
-        project.aggregator = SessionAggregator(project.store)
 
 
 def _before_tool() -> None:
     """Drain the ingest queue and pre-populate caches before every tool call."""
-    with _tracer.start_as_current_span("oracle.before_tool"):
-        from oracle.ingest_bridge import process_ingest
+    from oracle.ingest_bridge import process_ingest
 
-        process_ingest(_registry, _oracle_dir, _ensure_caches)
+    process_ingest(_registry, _oracle_dir, _ensure_caches)
 
 
 def _log(
@@ -89,36 +70,22 @@ def _log(
     tokens_saved: int,
 ) -> None:
     """Record a tool interaction to the agent log. No-op when store is not wired."""
-    global _previous_session_id
     if project.store is None:
         return
-
-    # Detect session boundary and finalize previous session
-    if (
-        _previous_session_id is not None
-        and _previous_session_id != project.session_id
-        and project.aggregator is not None
-    ):
-        project.aggregator.finalize_session(_previous_session_id)
-
-    _previous_session_id = project.session_id
-
     project.store.log_interaction(
         project.session_id, tool_name, input_data, cache_hit, tokens_saved, int(time.time())
     )
-    if project.tracker is not None:
-        project.tracker.record(tool_name, input_data)
+    # Emit OTel metrics (non-blocking, fire-and-forget)
+    telemetry = _get_telemetry()
+    telemetry.record_tool_call(
+        tool_name=tool_name,
+        session_id=project.session_id,
+        cache_hit=cache_hit,
+        tokens_saved=tokens_saved,
+    )
 
-    # Emit OTel metrics
-    _tool_calls_counter.add(1, {"tool_name": tool_name})
-    if cache_hit:
-        _cache_hits_counter.add(1, {"tool_name": tool_name})
-    if tokens_saved > 0:
-        _tokens_saved_counter.add(tokens_saved, {"tool_name": tool_name})
 
-
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_read")
+@mcp.tool()
 def oracle_read(path: str) -> str:
     """Read a file, returning full content on first read or a compact delta on repeat reads."""
     _before_tool()
@@ -137,8 +104,7 @@ def oracle_read(path: str) -> str:
     return response
 
 
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_grep")
+@mcp.tool()
 def oracle_grep(pattern: str, path: str = ".") -> str:
     """Search source files for a regex pattern. Returns up to 50 matches."""
     _before_tool()
@@ -159,8 +125,7 @@ def oracle_grep(pattern: str, path: str = ".") -> str:
     return result
 
 
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_status")
+@mcp.tool()
 def oracle_status() -> str:
     """Return current project status: stack info, git branch, clean/dirty state."""
     _before_tool()
@@ -183,8 +148,7 @@ def oracle_status() -> str:
     return result
 
 
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_run")
+@mcp.tool()
 def oracle_run(commands: list[str]) -> str:
     """Run allowlisted commands through the cache layer. Returns cached results when unchanged."""
     _before_tool()
@@ -216,8 +180,7 @@ def oracle_run(commands: list[str]) -> str:
     return "\n\n".join(parts)
 
 
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_ask")
+@mcp.tool()
 def oracle_ask(question: str) -> str:
     """Ask a natural-language question about the project. Routes to cache, grep, or Haiku."""
     _before_tool()
@@ -232,8 +195,7 @@ def oracle_ask(question: str) -> str:
     return result
 
 
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_forget")
+@mcp.tool()
 def oracle_forget(path: str) -> str:
     """Clear the file cache for a path. Next oracle_read returns full content."""
     _before_tool()
@@ -251,8 +213,7 @@ def oracle_forget(path: str) -> str:
     return result
 
 
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_stats")
+@mcp.tool()
 def oracle_stats() -> str:
     """Return token savings stats for the current session and cumulative across all sessions."""
     _before_tool()
@@ -264,21 +225,6 @@ def oracle_stats() -> str:
     if project.store is None:
         return "Error: store not initialized"
     return handle_oracle_stats(project.session_id, project.store)
-
-
-@mcp.tool()  # type: ignore[misc]
-@trace_tool("oracle_insights")
-def oracle_insights() -> str:
-    """Return actionable insights: file pairs, re-read candidates, cache trends."""
-    _before_tool()
-    project = _registry.current()
-    if project is None:
-        return "Error: no active project. Call oracle_read first to detect a project."
-    if project.store is None:
-        return "Error: store not initialized"
-    from oracle.tools.insights import handle_oracle_insights
-
-    return handle_oracle_insights(project.store)
 
 
 def main() -> None:

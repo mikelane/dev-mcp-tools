@@ -36,7 +36,7 @@ class OracleWatcher:
         self._stop_event.set()
 
 
-def _source_filter(_change: Change, path: str) -> bool:
+def _source_filter(change: Change, path: str) -> bool:
     """Return True for source files, False for ignored directories."""
     skip_dirs = {".git", ".venv", "node_modules", "__pycache__", ".mypy_cache"}
     return not any(part in skip_dirs for part in Path(path).parts)

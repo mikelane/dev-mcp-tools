@@ -6,6 +6,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+
 from oracle.cache.file_cache import FileCache
 from oracle.storage.store import OracleStore
 from oracle.tools.forget import handle_oracle_forget

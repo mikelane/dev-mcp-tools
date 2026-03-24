@@ -8,12 +8,6 @@ from pathlib import Path
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def _disable_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Prevent OTel from connecting to SigNoz during tests."""
-    monkeypatch.setenv("ORACLE_TELEMETRY_ENABLED", "false")
-
-
 @pytest.fixture
 def tmp_project(tmp_path: Path) -> Path:
     """Create a temp project directory with a fake .git marker for project root detection.

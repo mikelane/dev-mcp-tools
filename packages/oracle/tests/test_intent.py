@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import pytest
+
 from oracle.intent import Intent, classify_intent
 
 
 class DescribeClassifyIntent:
     @pytest.mark.parametrize(
-        ("question", "expected"),
+        "question,expected",
         [
             ("what changed?", Intent.GIT_STATUS),
             ("any modified files?", Intent.GIT_STATUS),
@@ -21,7 +22,7 @@ class DescribeClassifyIntent:
         assert classify_intent(question) == expected
 
     @pytest.mark.parametrize(
-        ("question", "expected"),
+        "question,expected",
         [
             ("ready to push?", Intent.READINESS),
             ("can I merge this?", Intent.READINESS),
@@ -33,7 +34,7 @@ class DescribeClassifyIntent:
         assert classify_intent(question) == expected
 
     @pytest.mark.parametrize(
-        ("question", "expected"),
+        "question,expected",
         [
             ("are tests passing?", Intent.TEST_STATUS),
             ("what's failing?", Intent.TEST_STATUS),
@@ -46,7 +47,7 @@ class DescribeClassifyIntent:
         assert classify_intent(question) == expected
 
     @pytest.mark.parametrize(
-        ("question", "expected"),
+        "question,expected",
         [
             ("what's the project structure?", Intent.PROJECT_STRUCTURE),
             ("what stack is this?", Intent.PROJECT_STRUCTURE),

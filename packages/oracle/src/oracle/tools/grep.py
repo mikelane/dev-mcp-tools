@@ -26,7 +26,6 @@ def handle_oracle_grep(pattern: str, path: str) -> str:
             capture_output=True,
             text=True,
             timeout=_GREP_TIMEOUT,
-            check=False,
         )
     except (subprocess.TimeoutExpired, OSError) as exc:
         return f"Error: grep failed for pattern '{pattern}': {exc}"

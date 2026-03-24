@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import pytest
+
 from oracle.cache.file_cache import FileCache
 from oracle.ingest_bridge import process_ingest
 from oracle.project import ProjectState
@@ -53,11 +54,11 @@ class DescribeLoggingPipeline:
         file_path = str(target)
 
         # First read: cache miss, tokens_saved == 0
-        _response1, tokens_saved1 = project.file_cache.smart_read_with_stats(file_path)
+        response1, tokens_saved1 = project.file_cache.smart_read_with_stats(file_path)
         assert tokens_saved1 == 0
 
         # Second read: cache hit, tokens_saved > 0 (file unchanged)
-        _response2, tokens_saved2 = project.file_cache.smart_read_with_stats(file_path)
+        response2, tokens_saved2 = project.file_cache.smart_read_with_stats(file_path)
         assert tokens_saved2 > 0
 
         # Log both interactions
@@ -130,7 +131,7 @@ class DescribeIngestPipeline:
             project.file_cache = FileCache(project.store)
 
     @staticmethod
-    def _enqueue(oracle_dir: Path, entry: dict) -> None:
+    def _enqueue(oracle_dir: Path, entry: dict) -> None:  # noqa: ANN001
         """Write an entry into the ingest queue directory."""
         queue_dir = oracle_dir / "ingest"
         queue_dir.mkdir(exist_ok=True)
@@ -153,6 +154,8 @@ class DescribeIngestPipeline:
         self._enqueue(
             oracle_dir,
             {
+                "session_id": "integration-test",
+                "cwd": str(project_dir),
                 "tool_name": "Read",
                 "tool_input": {"file_path": file_path},
             },
@@ -165,8 +168,8 @@ class DescribeIngestPipeline:
         project.file_cache = FileCache(project.store)
 
         # Process the ingest queue — this should cache the file
-        count = process_ingest(registry, oracle_dir, self._ensure_caches)
-        assert count == 1
+        result = process_ingest(registry, oracle_dir, self._ensure_caches)
+        assert result.cache_populated == 1
 
         # Now a direct smart_read_with_stats should be a cache hit
         response, tokens_saved = project.file_cache.smart_read_with_stats(file_path)
@@ -200,8 +203,8 @@ class DescribeIngestPipeline:
         project.file_cache = FileCache(project.store)
 
         # Process ingest — Grep entries are ignored
-        count = process_ingest(registry, oracle_dir, self._ensure_caches)
-        assert count == 0
+        result = process_ingest(registry, oracle_dir, self._ensure_caches)
+        assert result.cache_populated == 0
 
         # smart_read_with_stats on the file is a cache miss (ingest didn't cache it)
         response, tokens_saved = project.file_cache.smart_read_with_stats(file_path)
@@ -224,7 +227,7 @@ class DescribeCrossSessionCacheBehavior:
 
         # Session A: populate the cache
         cache_a = FileCache(store)
-        _response_a, tokens_saved_a = cache_a.smart_read_with_stats(file_path)
+        response_a, tokens_saved_a = cache_a.smart_read_with_stats(file_path)
         assert tokens_saved_a == 0  # first read is always a miss
 
         # Session B: new FileCache (fresh Python object), same OracleStore

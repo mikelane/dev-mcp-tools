@@ -7,11 +7,11 @@ import pytest
 
 @pytest.mark.small
 class DescribeMCPContract:
-    async def it_exposes_exactly_eight_tools(self) -> None:
+    async def it_exposes_exactly_seven_tools(self) -> None:
         from oracle.server import mcp
 
         tools = await mcp.list_tools()
-        assert len(tools) == 8
+        assert len(tools) == 7
 
     async def it_exposes_all_required_tool_names(self) -> None:
         from oracle.server import mcp
@@ -26,7 +26,6 @@ class DescribeMCPContract:
             "oracle_ask",
             "oracle_forget",
             "oracle_stats",
-            "oracle_insights",
         }
         assert required <= tool_names
 
@@ -80,13 +79,5 @@ class DescribeMCPContract:
 
         tools = {t.name: t for t in await mcp.list_tools()}
         schema = tools["oracle_status"].inputSchema
-        required = schema.get("required", [])
-        assert len(required) == 0
-
-    async def it_oracle_insights_has_no_required_parameters(self) -> None:
-        from oracle.server import mcp
-
-        tools = {t.name: t for t in await mcp.list_tools()}
-        schema = tools["oracle_insights"].inputSchema
         required = schema.get("required", [])
         assert len(required) == 0

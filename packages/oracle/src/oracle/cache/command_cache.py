@@ -111,7 +111,6 @@ class CommandCache:
                 text=True,
                 timeout=_COMMAND_TIMEOUT,
                 cwd=self._project_root,
-                check=False,
             )
         except subprocess.TimeoutExpired:
             return f"Command timed out after {_COMMAND_TIMEOUT}s: {command}", False, 0

@@ -8,6 +8,7 @@ from pathlib import Path
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
+
 from oracle.ingest import drain_ingest_queue
 
 

@@ -6,6 +6,7 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+
 from oracle.cache.command_cache import CommandCache, CommandNotAllowedError
 from oracle.storage.store import OracleStore
 
