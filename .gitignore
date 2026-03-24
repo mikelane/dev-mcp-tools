@@ -21,5 +21,8 @@ dist/
 # Secrets
 .env*.local
 
+# Personal Claude config
+CLAUDE.local.md
+
 # Worktrees
 .worktrees/

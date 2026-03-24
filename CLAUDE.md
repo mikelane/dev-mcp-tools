@@ -39,6 +39,24 @@ uv run ruff format --check .
 cd packages/oracle && uv run behave
 ```
 
+## Lefthook
+
+Pre-commit (parallel): `ruff check --fix` + `ruff format` on staged files.
+Pre-push (sequential): `ruff check .`, `ruff format --check .`, `mypy packages/oracle/src packages/shared/src`, `pytest` all three packages. Mypy does not yet cover webhook (known gap).
+
+## MCP Registration
+
+Oracle is registered as a stdio MCP server pointing to the monorepo:
+
+```json
+{
+  "command": "uv",
+  "args": ["run", "--directory", "/Users/mikelane/dev/dev-mcp-tools", "--package", "project-oracle", "project-oracle"]
+}
+```
+
+Webhook uses SSE: `claude mcp add --transport sse --scope user github-webhooks http://smee.local/sse`
+
 ## Workspace Rules
 
 - **One venv, one lockfile.** The root `.venv/` and `uv.lock` are shared across all packages. Never create package-level venvs.
